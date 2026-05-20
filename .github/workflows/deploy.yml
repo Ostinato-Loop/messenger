@@ -18,6 +18,9 @@ jobs:
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -29,9 +32,9 @@ jobs:
 
   # ─────────────────────────────────────────────
   # 2. Build + Deploy Worker (SSR)
-  #    Build and deploy run in the same job so
+  #    Build and wrangler deploy in same job so
   #    @cloudflare/vite-plugin virtual modules
-  #    are available to wrangler.
+  #    resolve correctly.
   # ─────────────────────────────────────────────
   deploy-worker:
     name: Build + Deploy Worker
@@ -48,6 +51,11 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 (required by Wrangler ≥4)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -90,6 +98,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js 22 (required by Wrangler ≥4)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -100,7 +113,7 @@ jobs:
       - name: Build (Vite + Cloudflare plugin)
         run: bun run build
 
-      - name: Create Pages project (no-op if already exists)
+      - name: Create Pages project (idempotent)
         run: |
           bunx wrangler pages project create loop-messenger \
             --production-branch=main 2>&1 || true
@@ -127,6 +140,9 @@ jobs:
       SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
