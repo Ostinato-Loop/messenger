@@ -1,14 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import {
-  PhoneCall,
-  Video,
-  MicOff,
-  Mic,
-  VideoOff,
-  PhoneOff,
-} from "lucide-react";
+import { PhoneCall, Video, MicOff, Mic, VideoOff, PhoneOff } from "lucide-react";
 
 import { useTRTC } from "@/hooks/useTRTC";
 import { useAuth } from "@/lib/auth-store";
@@ -50,7 +43,8 @@ function CallsPage() {
       .eq("caller_id", user.id)
       .order("started_at", { ascending: false })
       .limit(20)
-      .then(({ data }) => setRecent((data as RecentCall[]) ?? []));
+      .then(({ data }) => setRecent((data as RecentCall[]) ?? []))
+      .catch(() => {});
   }, [user]);
 
   async function initiateCall(
@@ -68,12 +62,16 @@ function CallsPage() {
       localVideoEl: localVideoRef.current,
       remoteVideoEl: remoteVideoRef.current,
     });
-    await supabase.from("calls").insert({
-      chat_id: chatId,
-      caller_id: user.id,
-      type: mode,
-      started_at: new Date().toISOString(),
-    });
+    supabase
+      .from("calls")
+      .insert({
+        chat_id: chatId,
+        caller_id: user.id,
+        type: mode,
+        started_at: new Date().toISOString(),
+      })
+      .then(() => {})
+      .catch(() => {});
   }
 
   async function hangUp() {
@@ -101,7 +99,6 @@ function CallsPage() {
         </div>
       </motion.header>
 
-      {/* Active call panel */}
       {activePanel && (
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
@@ -167,13 +164,13 @@ function CallsPage() {
               <PhoneOff size={22} className="text-white" />
             </button>
           </div>
+
           {callState.error && (
             <p className="mt-3 text-center text-xs text-destructive">{callState.error}</p>
           )}
         </motion.div>
       )}
 
-      {/* Empty state */}
       {recent.length === 0 && !inCall && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -187,13 +184,11 @@ function CallsPage() {
           </div>
           <h2 className="text-xl font-medium">No calls yet</h2>
           <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-            Tap the phone or video icon in any chat to start a call. Powered
-            by Tencent TRTC — real-time, low-latency.
+            Tap the phone or video icon in any chat to start a call.
           </p>
         </motion.div>
       )}
 
-      {/* Recent calls list */}
       {recent.length > 0 && (
         <div className="flex flex-col gap-3">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -220,11 +215,9 @@ function CallsPage() {
                 </p>
               </div>
               <button
-                onClick={() =>
-                  initiateCall(c.chat_id, c.peer_name ?? "User", c.type)
-                }
+                onClick={() => initiateCall(c.chat_id, c.peer_name ?? "User", c.type)}
                 className="rounded-full p-2 text-primary hover:bg-primary/10 transition"
-                aria-label={`Call back`}
+                aria-label="Call back"
               >
                 {c.type === "video" ? <Video size={18} /> : <PhoneCall size={18} />}
               </button>
