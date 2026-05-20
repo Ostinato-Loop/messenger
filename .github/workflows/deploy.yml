@@ -8,7 +8,7 @@ on:
 
 jobs:
   # ─────────────────────────────────────────────
-  # 1. Type-check & lint (non-blocking for V1)
+  # 1. Type-check & lint (non-blocking)
   # ─────────────────────────────────────────────
   typecheck:
     name: Type Check & Lint
@@ -18,6 +18,36 @@ jobs:
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run tsc --noEmit
+        continue-on-error: true
+      - run: bun run lint
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────
+  # 2. Build + Deploy Worker (SSR)
+  #    Build and deploy run in the same job so
+  #    @cloudflare/vite-plugin virtual modules
+  #    are available to wrangler.
+  # ─────────────────────────────────────────────
+  deploy-worker:
+    name: Build + Deploy Worker
+    runs-on: ubuntu-latest
+    needs: typecheck
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -26,21 +56,70 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Type check
-        run: bun run tsc --noEmit
-        continue-on-error: true
+      - name: Build (Vite + Cloudflare plugin)
+        run: bun run build
 
-      - name: Lint
-        run: bun run lint
-        continue-on-error: true
+      - name: Deploy Worker
+        run: bunx wrangler deploy
+
+      - name: Set TERMII_API_KEY secret on Worker
+        run: echo "${{ secrets.TERMII_API_KEY }}" | bunx wrangler secret put TERMII_API_KEY
+
+      - name: Set SUPABASE_URL secret on Worker
+        run: echo "${{ secrets.SUPABASE_URL }}" | bunx wrangler secret put SUPABASE_URL
+
+      - name: Set SUPABASE_PUBLISHABLE_KEY secret on Worker
+        run: echo "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" | bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
 
   # ─────────────────────────────────────────────
-  # 2. Build
+  # 3. Build + Deploy Pages (static CDN assets)
   # ─────────────────────────────────────────────
-  build:
-    name: Build
+  deploy-pages:
+    name: Build + Deploy Pages
     runs-on: ubuntu-latest
     needs: typecheck
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build (Vite + Cloudflare plugin)
+        run: bun run build
+
+      - name: Create Pages project (no-op if already exists)
+        run: |
+          bunx wrangler pages project create loop-messenger \
+            --production-branch=main 2>&1 || true
+
+      - name: Deploy static assets to Cloudflare Pages
+        run: |
+          bunx wrangler pages deploy dist/client \
+            --project-name=loop-messenger \
+            --branch=main \
+            --commit-dirty=true
+
+  # ─────────────────────────────────────────────
+  # 4. PR build check (no deploy)
+  # ─────────────────────────────────────────────
+  pr-build-check:
+    name: PR Build Check
+    runs-on: ubuntu-latest
+    needs: typecheck
+    if: github.event_name == 'pull_request'
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
@@ -48,112 +127,8 @@ jobs:
       SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build
-        run: bun run build
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-          retention-days: 1
-
-  # ─────────────────────────────────────────────
-  # 3. Deploy Worker (SSR) — main branch only
-  # ─────────────────────────────────────────────
-  deploy-worker:
-    name: Deploy to Cloudflare Workers
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Set TERMII_API_KEY secret on Worker
-        run: |
-          echo "${{ secrets.TERMII_API_KEY }}" | \
-            npx wrangler secret put TERMII_API_KEY
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Set SUPABASE_URL secret on Worker
-        run: |
-          echo "${{ secrets.SUPABASE_URL }}" | \
-            npx wrangler secret put SUPABASE_URL
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Set SUPABASE_PUBLISHABLE_KEY secret on Worker
-        run: |
-          echo "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" | \
-            npx wrangler secret put SUPABASE_PUBLISHABLE_KEY
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-  # ─────────────────────────────────────────────
-  # 4. Deploy Pages (static client assets CDN)
-  # ─────────────────────────────────────────────
-  deploy-pages:
-    name: Deploy to Cloudflare Pages
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Deploy static assets to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist/client --project-name=loop-messenger --branch=main
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build
