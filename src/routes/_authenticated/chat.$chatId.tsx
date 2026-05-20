@@ -50,7 +50,6 @@ function ChatThread() {
   const toggleReaction = useToggleReaction();
   const { othersTyping, sendTyping } = useTyping(chatId);
 
-  // ── load chat header + members ──────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -90,7 +89,6 @@ function ChatThread() {
     };
   }, [chatId, user?.id]);
 
-  // ── derived state ───────────────────────────────────────────────────────
   const profilesById = useMemo(() => {
     const map = new Map<string, Profile>();
     members.forEach((p) => map.set(p.user_id, p));
@@ -109,13 +107,11 @@ function ChatThread() {
           : "offline"
         : `${members.length} members`;
 
-  // ── auto-scroll ─────────────────────────────────────────────────────────
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, othersTyping.length]);
 
-  // ── TRTC calls ──────────────────────────────────────────────────────────
   const { callState, start: startCall, end: endCall, toggleAudio, toggleVideo } = useTRTC();
   const [callPanel, setCallPanel] = useState<{
     mode: "voice" | "video";
@@ -148,11 +144,10 @@ function ChatThread() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
       <motion.header
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="sticky top-0 z-20 safe-top glass-raised"
+        className="sticky top-0 z-20 safe-top glass-raised border-b border-border/50"
       >
         <div className="flex items-center gap-3 px-3 py-3">
           <button
@@ -176,10 +171,9 @@ function ChatThread() {
                 </div>
               )}
             </div>
-            {chat?.type === "direct" &&
-              presence.isOnline(otherDirect?.user_id) && (
-                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-[oklch(0.72_0.2_145)]" />
-              )}
+            {chat?.type === "direct" && presence.isOnline(otherDirect?.user_id) && (
+              <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-[oklch(0.72_0.2_145)]" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[15px] font-semibold">
@@ -190,7 +184,6 @@ function ChatThread() {
               {headerSubtitle}
             </p>
           </div>
-          {/* Voice call button */}
           <button
             onClick={() => handleStartCall("voice")}
             className="rounded-full p-2 text-foreground/90 transition hover:bg-accent/30 disabled:opacity-40"
@@ -199,7 +192,6 @@ function ChatThread() {
           >
             <PhoneCall size={18} />
           </button>
-          {/* Video call button */}
           <button
             onClick={() => handleStartCall("video")}
             className="rounded-full p-2 text-foreground/90 transition hover:bg-accent/30 disabled:opacity-40"
@@ -209,15 +201,8 @@ function ChatThread() {
             <Video size={18} />
           </button>
         </div>
-        <div className="border-t border-border/50 px-3 py-1.5">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Sparkles size={12} className="text-primary" />
-            <span>Rooms can be activated for this chat</span>
-          </div>
-        </div>
       </motion.header>
 
-      {/* ── Active call overlay ─────────────────────────────────────────── */}
       {callPanel && (
         <motion.div
           initial={{ opacity: 0, y: -12 }}
@@ -294,7 +279,6 @@ function ChatThread() {
         </motion.div>
       )}
 
-      {/* ── Messages ────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-3 py-4 pb-44">
         <div className="mx-auto flex max-w-md flex-col gap-3">
           {messages.length === 0 && (
@@ -311,7 +295,6 @@ function ChatThread() {
             const prev = messages[i - 1];
             const isMine = m.sender_id === user?.id;
             const sameSenderAsPrev = prev && prev.sender_id === m.sender_id;
-            const showAvatar = !sameSenderAsPrev;
             const replyToMessage = m.reply_to
               ? (messages.find((x) => x.id === m.reply_to) ?? null)
               : null;
@@ -321,7 +304,7 @@ function ChatThread() {
                 key={m.id}
                 message={m}
                 isMine={isMine}
-                showAvatar={showAvatar}
+                showAvatar={!sameSenderAsPrev}
                 senderName={
                   !isMine && chat?.type === "group"
                     ? (senderProfile?.display_name ?? "Member")
