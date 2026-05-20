@@ -7,9 +7,9 @@ on:
     branches: [main]
 
 jobs:
-  # ─────────────────────────────────────────────
-  # 1. Type-check & lint (non-blocking)
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────
+  # 1. Type-check & lint (non-blocking — never blocks deploy)
+  # ─────────────────────────────────────────────────────────
   typecheck:
     name: Type Check & Lint
     runs-on: ubuntu-latest
@@ -30,13 +30,13 @@ jobs:
       - run: bun run lint
         continue-on-error: true
 
-  # ─────────────────────────────────────────────
-  # 2. Build + Deploy Worker (SSR)
-  #    Build and wrangler deploy in same job so
-  #    @cloudflare/vite-plugin virtual modules
-  #    resolve correctly. Requires Node 22+ for
-  #    wrangler ≥4.
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────
+  # 2. Build + Deploy Worker (SSR + API routes)
+  #
+  #    Build and wrangler deploy MUST run in the same job
+  #    so @cloudflare/vite-plugin virtual modules stay live.
+  #    Node 22+ is required by wrangler ≥4.
+  # ─────────────────────────────────────────────────────────
   deploy-worker:
     name: Build + Deploy Worker
     runs-on: ubuntu-latest
@@ -53,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 22 (wrangler ≥4 requires v22+)
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -65,34 +65,29 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build (Vite + Cloudflare plugin)
+      - name: Build
         run: bun run build
 
       - name: Deploy Worker
         run: bunx wrangler deploy
 
-      - name: Set TERMII_API_KEY secret on Worker
-        run: echo "${{ secrets.TERMII_API_KEY }}" | bunx wrangler secret put TERMII_API_KEY
+      - name: Push runtime secrets to Worker
+        run: |
+          echo "${{ secrets.TERMII_API_KEY }}"        | bunx wrangler secret put TERMII_API_KEY
+          echo "${{ secrets.SUPABASE_URL }}"           | bunx wrangler secret put SUPABASE_URL
+          echo "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" | bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
+          echo "${{ secrets.TENCENT_SDKAPPID }}"      | bunx wrangler secret put TENCENT_SDKAPPID
+          echo "${{ secrets.TENCENT_SECRETKEY }}"     | bunx wrangler secret put TENCENT_SECRETKEY
 
-      - name: Set SUPABASE_URL secret on Worker
-        run: echo "${{ secrets.SUPABASE_URL }}" | bunx wrangler secret put SUPABASE_URL
-
-      - name: Set SUPABASE_PUBLISHABLE_KEY secret on Worker
-        run: echo "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" | bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
-
-  # ─────────────────────────────────────────────
-  # 3. Build + Deploy Pages (static CDN assets)
-  #
-  #    NOTE: Requires CLOUDFLARE_API_TOKEN to have
+  # ─────────────────────────────────────────────────────────
+  # 3. Build + Deploy Pages (static CDN)
+  #    Requires CLOUDFLARE_API_TOKEN to include
   #    Cloudflare Pages:Edit permission.
-  #    The Worker (job 2) already serves all assets
-  #    via its ASSETS binding, so this is a CDN
-  #    optimization layer — non-blocking for V1.
-  #
-  #    To enable: go to Cloudflare Dashboard →
-  #    API Tokens → edit CLOUDFLARE_API_TOKEN →
-  #    add "Cloudflare Pages:Edit" permission.
-  # ─────────────────────────────────────────────
+  #    The Worker already serves everything via its ASSETS
+  #    binding, so Pages is a CDN acceleration layer.
+  #    continue-on-error keeps the overall pipeline green
+  #    if the token doesn't have Pages permission yet.
+  # ─────────────────────────────────────────────────────────
   deploy-pages:
     name: Build + Deploy Pages
     runs-on: ubuntu-latest
@@ -110,7 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 22 (wrangler ≥4 requires v22+)
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -122,7 +117,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build (Vite + Cloudflare plugin)
+      - name: Build
         run: bun run build
 
       - name: Create Pages project (idempotent)
@@ -130,16 +125,16 @@ jobs:
           bunx wrangler pages project create loop-messenger \
             --production-branch=main 2>&1 || true
 
-      - name: Deploy static assets to Cloudflare Pages
+      - name: Deploy to Cloudflare Pages
         run: |
           bunx wrangler pages deploy dist/client \
             --project-name=loop-messenger \
             --branch=main \
             --commit-dirty=true
 
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────
   # 4. PR build check (no deploy)
-  # ─────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────
   pr-build-check:
     name: PR Build Check
     runs-on: ubuntu-latest
