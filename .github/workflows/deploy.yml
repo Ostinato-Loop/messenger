@@ -6,10 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
-  # ─────────────────────────────────────────────────────────
-  # 1. Type-check & lint (non-blocking — never blocks deploy)
-  # ─────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────
+  # 1. Type-check & lint  (non-blocking — never gates the deploy)
+  # ─────────────────────────────────────────────────────────────────────────
   typecheck:
     name: Type Check & Lint
     runs-on: ubuntu-latest
@@ -24,19 +27,20 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install --frozen-lockfile
-      - run: bun run tsc --noEmit
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Type check
+        run: bun run tsc --noEmit
         continue-on-error: true
-      - run: bun run lint
+      - name: Lint
+        run: bun run lint
         continue-on-error: true
 
-  # ─────────────────────────────────────────────────────────
-  # 2. Build + Deploy Worker (SSR + API routes)
-  #
-  #    Build and wrangler deploy MUST run in the same job
-  #    so @cloudflare/vite-plugin virtual modules stay live.
-  #    Node 22+ is required by wrangler ≥4.
-  # ─────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────
+  # 2. Build + Deploy Worker  (SSR + API routes via Cloudflare Workers)
+  #    Build and wrangler deploy run in the same job so @cloudflare/vite-plugin
+  #    virtual modules remain live.
+  # ─────────────────────────────────────────────────────────────────────────
   deploy-worker:
     name: Build + Deploy Worker
     runs-on: ubuntu-latest
@@ -53,8 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
@@ -73,21 +76,17 @@ jobs:
 
       - name: Push runtime secrets to Worker
         run: |
-          echo "${{ secrets.TERMII_API_KEY }}"        | bunx wrangler secret put TERMII_API_KEY
-          echo "${{ secrets.SUPABASE_URL }}"           | bunx wrangler secret put SUPABASE_URL
-          echo "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" | bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
-          echo "${{ secrets.TENCENT_SDKAPPID }}"      | bunx wrangler secret put TENCENT_SDKAPPID
-          echo "${{ secrets.TENCENT_SECRETKEY }}"     | bunx wrangler secret put TENCENT_SECRETKEY
+          echo "${{ secrets.TERMII_API_KEY }}"              | bunx wrangler secret put TERMII_API_KEY
+          echo "${{ secrets.SUPABASE_URL }}"                | bunx wrangler secret put SUPABASE_URL
+          echo "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}"    | bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
+          echo "${{ secrets.TENCENT_SDKAPPID }}"            | bunx wrangler secret put TENCENT_SDKAPPID
+          echo "${{ secrets.TENCENT_SECRETKEY }}"           | bunx wrangler secret put TENCENT_SECRETKEY
 
-  # ─────────────────────────────────────────────────────────
-  # 3. Build + Deploy Pages (static CDN)
-  #    Requires CLOUDFLARE_API_TOKEN to include
-  #    Cloudflare Pages:Edit permission.
-  #    The Worker already serves everything via its ASSETS
-  #    binding, so Pages is a CDN acceleration layer.
-  #    continue-on-error keeps the overall pipeline green
-  #    if the token doesn't have Pages permission yet.
-  # ─────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────
+  # 3. Build + Deploy Pages  (CDN edge cache layer)
+  #    Requires CLOUDFLARE_API_TOKEN to include Cloudflare Pages:Edit.
+  #    continue-on-error keeps the pipeline green if the token lacks it.
+  # ─────────────────────────────────────────────────────────────────────────
   deploy-pages:
     name: Build + Deploy Pages
     runs-on: ubuntu-latest
@@ -105,8 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
@@ -132,9 +130,9 @@ jobs:
             --branch=main \
             --commit-dirty=true
 
-  # ─────────────────────────────────────────────────────────
-  # 4. PR build check (no deploy)
-  # ─────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────
+  # 4. PR build check  (no deploy)
+  # ─────────────────────────────────────────────────────────────────────────
   pr-build-check:
     name: PR Build Check
     runs-on: ubuntu-latest
@@ -153,5 +151,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install --frozen-lockfile
-      - run: bun run build
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build
+        run: bun run build
