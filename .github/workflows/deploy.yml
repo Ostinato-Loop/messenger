@@ -34,7 +34,8 @@ jobs:
   # 2. Build + Deploy Worker (SSR)
   #    Build and wrangler deploy in same job so
   #    @cloudflare/vite-plugin virtual modules
-  #    resolve correctly.
+  #    resolve correctly. Requires Node 22+ for
+  #    wrangler ≥4.
   # ─────────────────────────────────────────────
   deploy-worker:
     name: Build + Deploy Worker
@@ -52,7 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 22 (required by Wrangler ≥4)
+      - name: Setup Node.js 22 (wrangler ≥4 requires v22+)
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -81,6 +82,16 @@ jobs:
 
   # ─────────────────────────────────────────────
   # 3. Build + Deploy Pages (static CDN assets)
+  #
+  #    NOTE: Requires CLOUDFLARE_API_TOKEN to have
+  #    Cloudflare Pages:Edit permission.
+  #    The Worker (job 2) already serves all assets
+  #    via its ASSETS binding, so this is a CDN
+  #    optimization layer — non-blocking for V1.
+  #
+  #    To enable: go to Cloudflare Dashboard →
+  #    API Tokens → edit CLOUDFLARE_API_TOKEN →
+  #    add "Cloudflare Pages:Edit" permission.
   # ─────────────────────────────────────────────
   deploy-pages:
     name: Build + Deploy Pages
@@ -88,6 +99,7 @@ jobs:
     needs: typecheck
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
+    continue-on-error: true
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
@@ -98,7 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js 22 (required by Wrangler ≥4)
+      - name: Setup Node.js 22 (wrangler ≥4 requires v22+)
         uses: actions/setup-node@v4
         with:
           node-version: "22"
