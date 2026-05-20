@@ -30,7 +30,9 @@ function LoginPage() {
     });
   }, [hydrated, session, profile, navigate]);
 
-  useEffect(() => { phoneRef.current?.focus(); }, []);
+  useEffect(() => {
+    phoneRef.current?.focus();
+  }, []);
 
   const cleanedPhone = () => {
     const p = phone.trim();
@@ -41,10 +43,15 @@ function LoginPage() {
     e.preventDefault();
     if (!phone.trim()) return;
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ phone: cleanedPhone() });
+    const { error } = await supabase.auth.signInWithOtp({
+      phone: cleanedPhone(),
+    });
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Code sent");
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Verification code sent via RALD");
     setStep("otp");
   }
 
@@ -58,9 +65,11 @@ function LoginPage() {
       type: "sms",
     });
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Welcome to Loop");
-    // onAuthStateChange will hydrate; navigation handled by effect above.
   }
 
   return (
@@ -126,16 +135,29 @@ function LoginPage() {
           type="submit"
           disabled={loading}
           className="group mt-2 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110 disabled:opacity-60"
-          style={{ background: "var(--gradient-purple)", boxShadow: "var(--shadow-glow)" }}
+          style={{
+            background: "var(--gradient-purple)",
+            boxShadow: "var(--shadow-glow)",
+          }}
         >
-          {loading ? "Please wait…" : step === "phone" ? "Send code" : "Verify & continue"}
-          <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+          {loading
+            ? "Please wait…"
+            : step === "phone"
+              ? "Send code"
+              : "Verify & continue"}
+          <ArrowRight
+            size={16}
+            className="transition-transform group-hover:translate-x-0.5"
+          />
         </button>
 
         {step === "otp" && (
           <button
             type="button"
-            onClick={() => { setStep("phone"); setOtp(""); }}
+            onClick={() => {
+              setStep("phone");
+              setOtp("");
+            }}
             className="mt-1 text-center text-xs text-muted-foreground hover:text-foreground"
           >
             Use a different number
@@ -143,9 +165,10 @@ function LoginPage() {
         )}
 
         <p className="mt-6 text-center text-[11px] leading-relaxed text-muted-foreground/80">
-          By continuing you agree to Loop's Terms & Privacy.
+          By continuing you agree to Loop's Terms &amp; Privacy.
           <br />
-          A LILCKY STUDIO product.
+          <span className="text-primary/70">🔒 Protected by RALD Auth</span>
+          {" · "}A LILCKY STUDIO product.
         </p>
       </motion.form>
     </div>
