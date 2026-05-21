@@ -9,6 +9,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-store";
+import { uploadAttachment } from "./useStorage";
 
 // ---------- Types ----------
 export type Profile = {
@@ -48,7 +49,6 @@ export type Message = {
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string;
-  // hydrated client-side
   pending?: boolean;
   failed?: boolean;
   reactions?: { emoji: string; user_id: string }[];
@@ -126,7 +126,6 @@ export function useChats() {
     staleTime: 10_000,
   });
 
-  // Realtime: any message insert OR chat row change → refetch list (cheap)
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
@@ -172,7 +171,6 @@ export function useMessages(chatId: string | undefined) {
     staleTime: 5_000,
   });
 
-  // Realtime subscription for this chat
   useEffect(() => {
     if (!chatId) return;
     const channel = supabase
@@ -184,7 +182,6 @@ export function useMessages(chatId: string | undefined) {
           const incoming = payload.new as Message;
           qc.setQueryData<Message[]>(key, (curr) => {
             if (!curr) return [incoming];
-            // de-dup: replace optimistic by sender_id+content recency, or skip if id exists
             if (curr.some((m) => m.id === incoming.id)) return curr;
             const optimisticIdx = curr.findIndex(
               (m) => m.pending && m.sender_id === incoming.sender_id && m.content === incoming.content,
@@ -217,7 +214,7 @@ export function useMessages(chatId: string | undefined) {
     return () => { supabase.removeChannel(channel); };
   }, [chatId, qc]);
 
-  // Mark as read when messages change
+  // Mark last message as read
   useEffect(() => {
     if (!chatId || !user?.id) return;
     const messages = query.data;
@@ -237,22 +234,37 @@ export function useMessages(chatId: string | undefined) {
   return query;
 }
 
-// ---------- Send / react ----------
+// ---------- Send text or media ----------
 export function useSendMessage(chatId: string | undefined) {
   const qc = useQueryClient();
   const { user } = useAuth();
 
   return useCallback(
-    async (content: string, replyTo?: string) => {
-      if (!chatId || !user?.id || !content.trim()) return;
+    async (content: string, replyTo?: string, mediaFile?: File) => {
+      if (!chatId || !user?.id) return;
+      if (!content.trim() && !mediaFile) return;
+
+      let media_url: string | null = null;
+      let msgType: Message["type"] = "text";
+
+      if (mediaFile) {
+        try {
+          const uploaded = await uploadAttachment(chatId, mediaFile);
+          media_url = uploaded.publicUrl;
+          msgType = uploaded.mediaType;
+        } catch {
+          return;
+        }
+      }
+
       const tempId = `temp-${crypto.randomUUID()}`;
       const optimistic: Message = {
         id: tempId,
         chat_id: chatId,
         sender_id: user.id,
-        content: content.trim(),
-        type: "text",
-        media_url: null,
+        content: content.trim() || null,
+        type: msgType,
+        media_url,
         reply_to: replyTo ?? null,
         edited_at: null,
         deleted_at: null,
@@ -265,7 +277,14 @@ export function useSendMessage(chatId: string | undefined) {
 
       const { data, error } = await supabase
         .from("messages")
-        .insert({ chat_id: chatId, sender_id: user.id, content: content.trim(), type: "text", reply_to: replyTo ?? null })
+        .insert({
+          chat_id: chatId,
+          sender_id: user.id,
+          content: content.trim() || null,
+          type: msgType,
+          media_url,
+          reply_to: replyTo ?? null,
+        })
         .select()
         .single();
 
@@ -285,6 +304,7 @@ export function useSendMessage(chatId: string | undefined) {
   );
 }
 
+// ---------- Reactions ----------
 export function useToggleReaction() {
   const { user } = useAuth();
   return useCallback(
@@ -351,7 +371,6 @@ export function useTyping(chatId: string | undefined) {
     });
   }, [user?.id]);
 
-  // auto-clear other-typing after 4s of silence
   useEffect(() => {
     if (othersTyping.length === 0) return;
     const t = setTimeout(() => setOthersTyping([]), 4000);
