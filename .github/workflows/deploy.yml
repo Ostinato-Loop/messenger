@@ -36,9 +36,9 @@ jobs:
         run: bun run lint
         continue-on-error: true
 
-  # ── 2. Build + Deploy Worker ───────────────────────────────────────────
-  deploy-worker:
-    name: Build + Deploy Worker
+  # ── 2. Build + Deploy Worker with Assets ───────────────────────────────
+  deploy:
+    name: Build + Deploy
     runs-on: ubuntu-latest
     needs: typecheck
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -61,54 +61,15 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Build
         run: bun run build
-      - name: Deploy Worker
+      - name: Deploy Worker + Assets
         run: bunx wrangler deploy
-      - name: Push runtime secrets to Worker
+      - name: Push runtime secrets
         run: |
-          echo ${{ secrets.TERMII_API_KEY }}                | bunx wrangler secret put TERMII_API_KEY
-          echo ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}     | bunx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-          echo ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }} | bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
+          echo "${{ secrets.TERMII_API_KEY }}"                | bunx wrangler secret put TERMII_API_KEY
+          echo "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"     | bunx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+          echo "${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}" | bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
 
-  # ── 3. Deploy Pages ────────────────────────────────────────────────────
-  deploy-pages:
-    name: Deploy Pages
-    runs-on: ubuntu-latest
-    needs: [typecheck, deploy-worker]
-    if: |
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      needs.deploy-worker.result == 'success'
-    environment: production
-    env:
-      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-      - name: Build
-        run: bun run build
-      - name: Create Pages project (idempotent)
-        run: bunx wrangler pages project create messenger --production-branch=main 2>&1 || true
-      - name: Deploy to Cloudflare Pages
-        run: |
-          bunx wrangler pages deploy dist/client             --project-name=messenger             --branch=main             --commit-dirty=true             --compatibility-flags=nodejs_compat
-      - name: Push runtime secrets to Pages
-        run: |
-          echo ${{ secrets.TERMII_API_KEY }}                | bunx wrangler pages secret put TERMII_API_KEY            --project-name=messenger
-          echo ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}     | bunx wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY --project-name=messenger
-          echo ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }} | bunx wrangler pages secret put SUPABASE_PUBLISHABLE_KEY  --project-name=messenger
-
-  # ── 4. PR build check ─────────────────────────────────────────────────
+  # ── 3. PR build check (no deploy) ─────────────────────────────────────
   pr-build-check:
     name: PR Build Check
     runs-on: ubuntu-latest
