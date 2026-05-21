@@ -1,20 +1,21 @@
 /**
- * RALD Auth — SMS delivery hook for Supabase custom SMS provider.
+ * RALD Auth — SMS delivery hook (legacy Supabase custom SMS provider fallback).
+ * Primary OTP flow is now handled by the RALD Auth API (/api/auth/send-otp).
  *
- * Configure Supabase:  Auth → SMS Providers → Custom
- *   Webhook URL:    https://<your-worker>.workers.dev/api/sms-hook
- *   HTTP method:    POST
- *
- * Supabase sends: { phone: "+234...", otp: "123456" }
- * We relay via Termii (branded as RALD Auth for Loop Messenger).
+ * This endpoint is kept for compatibility if Supabase custom SMS is configured.
+ * Configure Supabase: Auth → SMS Providers → Custom
+ *   Webhook URL: https://<your-worker>.workers.dev/api/sms-hook
  */
 import { createAPIFileRoute } from "@tanstack/react-start/api";
 
-const TERMII_BASE = "https://api.ng.termii.com";
+const TERMII_BASE = (process.env.TERMII_BASE_URL || "https://v3.api.termii.com").replace(/\/$/, "");
 
 export const APIRoute = createAPIFileRoute("/api/sms-hook")({
   POST: async ({ request }) => {
     const TERMII_API_KEY = process.env.TERMII_API_KEY;
+    const TERMII_SENDER_ID = process.env.TERMII_SENDER_ID || "Ostloop";
+    const TERMII_CHANNEL = process.env.TERMII_CHANNEL || "generic";
+
     if (!TERMII_API_KEY) {
       console.error("[RALD/sms-hook] TERMII_API_KEY not set");
       return new Response(
@@ -41,7 +42,6 @@ export const APIRoute = createAPIFileRoute("/api/sms-hook")({
       );
     }
 
-    // Normalise to E.164 digits only (Termii wants no leading +)
     const to = phone.replace(/^\+/, "").replace(/\D/g, "");
 
     const res = await fetch(`${TERMII_BASE}/api/sms/send`, {
@@ -50,10 +50,10 @@ export const APIRoute = createAPIFileRoute("/api/sms-hook")({
       body: JSON.stringify({
         api_key: TERMII_API_KEY,
         to,
-        from: "Loop",
-        sms: `Your Loop Messenger verification code is ${otp}. Valid for 10 minutes. Do not share.`,
+        from: TERMII_SENDER_ID,
+        sms: `Your Loop Messenger (RALD Auth) code is ${otp}. Valid 5 mins. Do not share.`,
         type: "plain",
-        channel: "generic",
+        channel: TERMII_CHANNEL,
       }),
     });
 
