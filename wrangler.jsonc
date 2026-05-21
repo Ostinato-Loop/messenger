@@ -10,5 +10,19 @@
   },
   "observability": {
     "enabled": true
+  },
+  // Environment variables (non-secret, safe to commit)
+  "vars": {
+    "TERMII_BASE_URL": "https://v3.api.termii.com",
+    "TERMII_SENDER_ID": "Ostloop",
+    "TERMII_CHANNEL": "generic",
+    "SUPABASE_URL": "https://onxdcikfttdmnhofsuwo.supabase.co"
   }
+  // Secrets (set via: wrangler secret put <NAME>)
+  // Required secrets:
+  //   TERMII_API_KEY
+  //   SUPABASE_SERVICE_ROLE_KEY
+  //   SUPABASE_PUBLISHABLE_KEY  (anon key)
+  //   TENCENT_SDKAPPID
+  //   TENCENT_SECRETKEY
 }
