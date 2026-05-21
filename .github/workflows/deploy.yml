@@ -101,7 +101,7 @@ jobs:
             --project-name=messenger \
             --branch=main \
             --commit-dirty=true \
-            --compatibility-flags=nodejs_compat
+            
 
       - name: Push runtime secrets to Pages
         run: |
