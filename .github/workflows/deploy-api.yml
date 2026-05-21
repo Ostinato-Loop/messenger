@@ -1,9 +1,10 @@
-name: Deploy — API Server
+name: Deploy — Cloudflare Worker (API Gateway)
 
 on:
   push:
     branches: [main]
     paths:
+      - 'workers/loop-messenger-api/**'
       - 'artifacts/api-server/**'
       - 'lib/db/**'
       - 'lib/api-spec/**'
@@ -15,10 +16,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
-    name: Build & Deploy API
+  deploy-worker:
+    name: Deploy Cloudflare Worker
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    environment:
+      name: production
 
     steps:
       - name: Checkout
@@ -29,43 +33,38 @@ jobs:
         with:
           node-version: 22
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Install worker dependencies
+        working-directory: workers/loop-messenger-api
+        run: npm install
+
+      - name: Deploy worker
+        uses: cloudflare/wrangler-action@v3
         with:
-          version: 10
-          run_install: false
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/loop-messenger-api
+          command: deploy --minify
 
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
+      - name: Set TERMII_API_KEY secret
+        if: ${{ secrets.TERMII_API_KEY != '' }}
+        uses: cloudflare/wrangler-action@v3
         with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: pnpm-${{ runner.os }}-
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/loop-messenger-api
+          command: secret put TERMII_API_KEY
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TERMII_API_KEY: ${{ secrets.TERMII_API_KEY }}
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run codegen
-        run: pnpm --filter @workspace/api-spec run codegen
-
-      - name: Build API
-        run: pnpm --filter @workspace/api-server run build
-
-      # ── Option A: Deploy to Cloudflare Workers (adapt wrangler.toml as needed) ──
-      # - name: Deploy to Cloudflare Workers
-      #   uses: cloudflare/wrangler-action@v3
-      #   with:
-      #     apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      #     accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      #     workingDirectory: artifacts/api-server
-
-      # ── Option B: Deploy to any Node.js host (Railway, Fly.io, etc.) ──
-      - name: Echo deployment ready
-        run: |
-          echo "API build complete. Configure your deployment target above."
-          echo "Build output: artifacts/api-server/dist/"
-          ls -lh artifacts/api-server/dist/
+      - name: Set API_ORIGIN secret
+        if: ${{ secrets.API_ORIGIN_URL != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/loop-messenger-api
+          command: secret put API_ORIGIN
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          API_ORIGIN: ${{ secrets.API_ORIGIN_URL }}
