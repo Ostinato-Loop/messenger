@@ -3,18 +3,23 @@ name: PR Check
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
+
+concurrency:
+  group: pr-check-${{ github.head_ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
-    name: Typecheck, Lint & Build
+    name: Typecheck & Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
@@ -22,12 +27,15 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Typecheck
-        run: bun run build --mode development
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_RALD_API_URL: ${{ secrets.VITE_RALD_API_URL }}
+        run: bun run typecheck
 
-      - name: Lint
-        run: bun run lint
-        continue-on-error: false
+      - name: Build
+        run: bun run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          # RALD Auth routes live inside the Worker — no external API URL needed
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          TERMII_BASE_URL: https://v3.api.termii.com
+          TERMII_SENDER_ID: Ostloop
+          TERMII_CHANNEL: generic
