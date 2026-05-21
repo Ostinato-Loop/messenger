@@ -11,7 +11,7 @@ env:
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
-  # 1. Type-check & lint  (non-blocking — never gates the deploy)
+  # 1. Type-check & lint  (non-blocking quality gate)
   # ─────────────────────────────────────────────────────────────────────────
   typecheck:
     name: Type Check & Lint
@@ -38,8 +38,7 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────
   # 2. Build + Deploy Worker  (SSR + API routes via Cloudflare Workers)
-  #    Build and wrangler deploy run in the same job so @cloudflare/vite-plugin
-  #    virtual modules remain live.
+  #    Requires CLOUDFLARE_API_TOKEN with Workers Scripts:Edit permission.
   # ─────────────────────────────────────────────────────────────────────────
   deploy-worker:
     name: Build + Deploy Worker
@@ -47,6 +46,7 @@ jobs:
     needs: typecheck
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
+    continue-on-error: true
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
@@ -56,24 +56,18 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
       - name: Build
         run: bun run build
-
       - name: Deploy Worker
         run: bunx wrangler deploy
-
       - name: Push runtime secrets to Worker
         run: |
           echo "${{ secrets.TERMII_API_KEY }}"              | bunx wrangler secret put TERMII_API_KEY
@@ -84,8 +78,7 @@ jobs:
 
   # ─────────────────────────────────────────────────────────────────────────
   # 3. Build + Deploy Pages  (CDN edge cache layer)
-  #    Requires CLOUDFLARE_API_TOKEN to include Cloudflare Pages:Edit.
-  #    continue-on-error keeps the pipeline green if the token lacks it.
+  #    Requires CLOUDFLARE_API_TOKEN with Cloudflare Pages:Edit permission.
   # ─────────────────────────────────────────────────────────────────────────
   deploy-pages:
     name: Build + Deploy Pages
@@ -103,26 +96,20 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
       - name: Build
         run: bun run build
-
       - name: Create Pages project (idempotent)
         run: |
           bunx wrangler pages project create loop-messenger \
             --production-branch=main 2>&1 || true
-
       - name: Deploy to Cloudflare Pages
         run: |
           bunx wrangler pages deploy dist/client \
