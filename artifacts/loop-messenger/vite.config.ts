@@ -44,8 +44,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes("node_modules/react-dom")) return "react-dom";
-          if (id.includes("node_modules/react")) return "react-core";
+          if (id.includes("node_modules/react-dom/")) return "react-dom";
+          if (id.includes("node_modules/react/")) return "react-core";
           if (id.includes("node_modules/framer-motion")) return "framer-motion";
           if (id.includes("node_modules/@tanstack")) return "tanstack";
           if (id.includes("node_modules/date-fns")) return "date-fns";
@@ -66,10 +66,10 @@ export default defineConfig({
     minify: "esbuild",
     target: "es2020",
     assetsInlineLimit: 4096,
-    esbuildOptions: {
-      drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
-    },
     cssCodeSplit: true,
+  },
+  esbuild: {
+    drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
   },
   server: {
     port,

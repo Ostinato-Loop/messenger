@@ -93,7 +93,6 @@ const authLimiter = rateLimit({
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { error: "Too many auth attempts. Wait 10 minutes and try again." },
-  keyGenerator: (req) => req.ip ?? "unknown",
 });
 
 app.use(globalLimiter);
