@@ -36,9 +36,9 @@ jobs:
         run: bun run lint
         continue-on-error: true
 
-  # ── 2. Build + Deploy Worker with Assets ───────────────────────────────
+  # ── 2. Build + Deploy to Cloudflare Pages ─────────────────────────────
   deploy:
-    name: Build + Deploy
+    name: Build + Deploy to Pages
     runs-on: ubuntu-latest
     needs: typecheck
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -57,17 +57,57 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
       - name: Build
         run: bun run build
-      - name: Deploy Worker + Assets
-        run: bunx wrangler deploy
-      - name: Push runtime secrets
+
+      - name: Inspect build output
         run: |
-          echo "${{ secrets.TERMII_API_KEY }}"                | bunx wrangler secret put TERMII_API_KEY
-          echo "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"     | bunx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-          echo "${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}" | bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
+          echo "=== dist layout ===" && find dist -type f | sort || true
+
+      - name: Bundle SSR worker into _worker.js
+        run: |
+          set -e
+          # Priority 1 – Vite/cloudflare-plugin direct output
+          if [ -f dist/worker/index.js ]; then
+            cp dist/worker/index.js dist/client/_worker.js
+            echo "✅ Bundled from dist/worker/index.js"
+          # Priority 2 – TanStack Start server preset
+          elif [ -f dist/server/index.js ]; then
+            cp dist/server/index.js dist/client/_worker.js
+            echo "✅ Bundled from dist/server/index.js"
+          # Priority 3 – wrangler dry-run (no assets = no 10000 error)
+          else
+            echo "Falling back to wrangler dry-run..."
+            bunx wrangler deploy --dry-run --outdir .wrangler-build 2>&1
+            if [ -f .wrangler-build/index.js ]; then
+              cp .wrangler-build/index.js dist/client/_worker.js
+              echo "✅ Bundled from wrangler dry-run"
+            else
+              echo "⚠️  No worker bundle found — Pages will serve as static SPA"
+              echo '/* /index.html 200' > dist/client/_redirects
+            fi
+          fi
+
+      - name: Create Pages project (idempotent)
+        run: bunx wrangler pages project create messenger --production-branch=main 2>&1 || true
+
+      - name: Deploy to Cloudflare Pages
+        run: |
+          bunx wrangler pages deploy dist/client \
+            --project-name=messenger \
+            --branch=main \
+            --commit-dirty=true \
+            --compatibility-flags=nodejs_compat
+
+      - name: Push runtime secrets to Pages
+        run: |
+          echo "${{ secrets.TERMII_API_KEY }}"                | bunx wrangler pages secret put TERMII_API_KEY            --project-name=messenger
+          echo "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"     | bunx wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY --project-name=messenger
+          echo "${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}" | bunx wrangler pages secret put SUPABASE_PUBLISHABLE_KEY  --project-name=messenger
 
   # ── 3. PR build check (no deploy) ─────────────────────────────────────
   pr-build-check:
