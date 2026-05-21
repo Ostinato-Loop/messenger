@@ -38,34 +38,38 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    // African 3G/4G/5G optimization: aggressive chunk splitting + compression
-    chunkSizeWarningLimit: 400,
+    chunkSizeWarningLimit: 500,
+    reportCompressedSize: false,
+    sourcemap: false,
     rollupOptions: {
       output: {
-        // Granular manual chunks so first paint is minimal
         manualChunks(id) {
-          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) return "react-core";
+          if (id.includes("node_modules/react-dom")) return "react-dom";
+          if (id.includes("node_modules/react")) return "react-core";
           if (id.includes("node_modules/framer-motion")) return "framer-motion";
           if (id.includes("node_modules/@tanstack")) return "tanstack";
           if (id.includes("node_modules/date-fns")) return "date-fns";
           if (id.includes("node_modules/wouter")) return "router";
           if (id.includes("node_modules/lucide-react")) return "icons";
-          if (id.includes("node_modules/zod") || id.includes("node_modules/react-hook-form")) return "forms";
+          if (id.includes("node_modules/zod") || id.includes("node_modules/react-hook-form") || id.includes("node_modules/@hookform")) return "forms";
           if (id.includes("node_modules/@radix-ui")) return "radix";
           if (id.includes("src/components/ui/")) return "ui";
           if (id.includes("src/pages/")) return "pages";
+          if (id.includes("node_modules/")) return "vendor";
         },
-        // Content-hash filenames for long-term caching on Cloudflare edge
         entryFileNames: "assets/[name].[hash].js",
         chunkFileNames: "assets/[name].[hash].js",
         assetFileNames: "assets/[name].[hash].[ext]",
       },
+      treeshake: { moduleSideEffects: false },
     },
-    // Minify aggressively
     minify: "esbuild",
     target: "es2020",
-    // Don't inline assets > 4kb — serve from CDN instead
     assetsInlineLimit: 4096,
+    esbuildOptions: {
+      drop: process.env.NODE_ENV === "production" ? ["console", "debugger"] : [],
+    },
+    cssCodeSplit: true,
   },
   server: {
     port,
@@ -73,6 +77,9 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
     fs: { strict: true },
+    warmup: {
+      clientFiles: ["./src/main.tsx", "./src/App.tsx", "./src/pages/auth.tsx"],
+    },
   },
   preview: { port, host: "0.0.0.0", allowedHosts: true },
 });

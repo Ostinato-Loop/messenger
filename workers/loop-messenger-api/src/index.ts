@@ -12,11 +12,12 @@ const ALWAYS_ALLOWED = [
 
 function resolveCorsOrigin(origin: string | null, env: Env): string {
   if (!origin) return ALWAYS_ALLOWED[0];
-  const extras = (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim());
+  const extras = (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
   const all = [...ALWAYS_ALLOWED, ...extras];
   const ok =
     all.includes(origin) ||
     origin.endsWith(".replit.dev") ||
+    origin.endsWith(".replit.app") ||
     origin.endsWith(".pages.dev") ||
     origin === "http://localhost:3000" ||
     origin === "http://localhost:5173";
@@ -106,6 +107,7 @@ async function proxyToApi(
   const proxyHeaders = new Headers(request.headers);
   proxyHeaders.set("X-Forwarded-For", request.headers.get("CF-Connecting-IP") || "");
   proxyHeaders.set("X-Real-IP", request.headers.get("CF-Connecting-IP") || "");
+  proxyHeaders.set("X-Forwarded-Proto", "https");
   proxyHeaders.delete("host");
 
   const proxyReq = new Request(target, {
@@ -125,6 +127,7 @@ async function proxyToApi(
   const resHeaders = new Headers(res.headers);
   Object.entries(cors).forEach(([k, v]) => resHeaders.set(k, v));
   resHeaders.set("X-Powered-By", "Loop Messenger / RALD Infra");
+  resHeaders.delete("transfer-encoding");
 
   return new Response(res.body, {
     status: res.status,
@@ -144,7 +147,11 @@ export default {
     }
 
     if (url.pathname === "/health" || url.pathname === "/api/healthz") {
-      return jsonResponse({ status: "ok", worker: "loop-messenger-api", ts: Date.now() }, 200, cors);
+      return jsonResponse(
+        { status: "ok", worker: "loop-messenger-api", ts: Date.now() },
+        200,
+        cors
+      );
     }
 
     if (url.pathname === "/api/sms-hook" && request.method === "POST") {
