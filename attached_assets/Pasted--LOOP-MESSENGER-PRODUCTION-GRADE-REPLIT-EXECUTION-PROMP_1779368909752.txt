@@ -1,0 +1,318 @@
+# LOOP MESSENGER — PRODUCTION GRADE REPLIT EXECUTION PROMPT
+
+You are now the Lead Production Engineer for Loop Messenger.
+
+Project Goal:
+Transform Loop Messenger into a scalable production-grade communications platform with a futuristic neon-orange identity powered by RALD Auth and TERMII OTP infrastructure.
+
+Existing Stack:
+- Frontend: React + TanStack Start
+- Backend Runtime: Cloudflare Workers
+- Database/Auth: Supabase
+- CI/CD: GitHub Actions
+- Runtime Package Manager: Bun
+- OTP Provider: TERMII
+- Branding Layer: RALD Auth
+- Product Name: Loop Messenger
+
+Repository:
+https://github.com/Ostinato-Loop/messenger.git
+
+Supabase Project:
+https://onxdcikfttdmnhofsuwo.supabase.co
+
+====================================================
+CORE EXECUTION RULES
+====================================================
+
+1. DO NOT BREAK EXISTING CODE
+- Preserve architecture.
+- Refactor carefully.
+- No destructive rewrites.
+- Maintain compatibility with Cloudflare Workers runtime.
+- Preserve all current routing structure and Supabase tables.
+
+2. ALL GITHUB ACTIONS MUST STAY GREEN
+Before every commit:
+- bun install --frozen-lockfile
+- bun run tsc --noEmit
+- bun run build
+
+Fix ALL:
+- TypeScript issues
+- ESLint issues
+- Cloudflare deployment issues
+- Bun lockfile issues
+- CI pipeline issues
+
+3. MVP MUST REMAIN DEPLOYABLE AT ALL TIMES
+Never leave the repo in a broken state.
+
+4. ASK ME FOR ANY MISSING CREDENTIALS
+Prompt me securely for:
+- TERMII_API_KEY
+- TERMII_SENDER_ID
+- Tencent Cloud credentials (if voice/video enabled)
+- Cloudflare API token
+- Supabase service role key
+- Supabase anon key
+- GitHub PAT if required
+- Resend API key if email fallback is enabled
+
+====================================================
+BRANDING SYSTEM
+====================================================
+
+Brand Identity:
+- Product: Loop Messenger
+- Identity Layer: RALD Auth
+- Delivery Infrastructure: TERMII
+- Style: Futuristic neon orange
+- Theme: Dark cyber communication OS
+- Corners: Rounded/circular
+- Accent Glow: Orange neon
+- UI Feel: Apple + Cyberpunk + Telegram + Discord hybrid
+
+Visual Direction:
+- Deep black backgrounds
+- Orange glow borders
+- Glassmorphism panels
+- Soft neon hover effects
+- Animated gradients
+- Infinite loop logo animation
+- Smooth transitions
+- Mobile-first responsiveness
+
+Remove ALL purple branding.
+Orange only.
+
+====================================================
+AUTH SYSTEM REQUIREMENTS
+====================================================
+
+REMOVE:
+- Twilio references
+- Twilio Verify
+- Legacy provider labels
+
+KEEP:
+- Supabase session engine
+- Existing user tables
+- Existing auth compatibility
+
+BUILD:
+Custom RALD Auth Layer
+
+Flow:
+Loop Messenger UI
+→ RALD Auth Interface
+→ Cloudflare Worker OTP Relay
+→ TERMII API
+→ Supabase Session Creation
+
+Auth Requirements:
+- OTP only
+- No email login
+- Nigerian phone formatting support
+- Auto OTP input focus
+- OTP resend cooldown
+- Device session persistence
+- Auth loading states
+- Error boundaries
+- Secure token storage
+- Mobile optimized keypad UX
+
+Required Worker Route:
+POST /api/sms-hook
+
+Worker Responsibilities:
+- Validate payload
+- Format phone numbers
+- Send OTP through TERMII
+- Handle delivery errors
+- Return structured JSON
+- Log safely
+- Rate limit abuse
+- Support retries
+
+====================================================
+PRODUCTION INFRASTRUCTURE
+====================================================
+
+Configure and validate:
+- GitHub Actions
+- Cloudflare Workers
+- Cloudflare Pages
+- Wrangler config
+- Supabase environment variables
+- Bun runtime
+- Edge caching
+- Static asset delivery
+
+GitHub Actions Required:
+1. PR Check
+2. Type Check
+3. Build
+4. Deploy Worker
+5. Deploy Pages
+
+All must pass GREEN.
+
+====================================================
+V1 → V5 PRODUCT PIPELINE
+====================================================
+
+=====================
+V1 — SECURE MESSAGING MVP
+=====================
+
+Launch immediately with:
+- OTP auth
+- Real-time messaging
+- Presence indicators
+- Typing indicators
+- Read receipts
+- Reactions
+- Group chats
+- Voice notes
+- File uploads
+- User avatars
+- Chat search
+- Notifications
+
+Infrastructure:
+- Supabase Realtime
+- Cloudflare Edge
+- TERMII OTP
+- GitHub CI/CD
+
+Goal:
+Stable MVP launch.
+
+=====================
+V2 — SOCIAL COMMUNICATION LAYER
+=====================
+
+Add:
+- Channels
+- Communities
+- Broadcast lists
+- Creator pages
+- Public profiles
+- Invite systems
+- QR login
+- Username handles
+- Discovery system
+
+Add moderation:
+- Report system
+- Admin dashboards
+- Audit logs
+
+=====================
+V3 — BUSINESS & API PLATFORM
+=====================
+
+Transform Loop into communications infrastructure.
+
+Build:
+- RALD Identity APIs
+- Messaging SDK
+- OTP APIs
+- Business verification
+- Enterprise dashboards
+- Developer portal
+- Webhooks
+- API keys
+- Usage analytics
+- Team accounts
+
+Goal:
+B2B communication infrastructure.
+
+=====================
+V4 — VOICE + VIDEO + PAYMENTS
+=====================
+
+Add:
+- Tencent RTC integration
+- Voice calls
+- Video calls
+- Screen sharing
+- Wallet system
+- Escrow
+- Creator monetization
+- Subscription channels
+- Digital storefronts
+
+====================================================
+V5 — RALD NETWORK
+====================================================
+
+Expand into:
+- Universal identity graph
+- Multi-app auth
+- AI communication assistant
+- Enterprise federation
+- Cross-platform identity
+- Decentralized communication layer
+- Commerce APIs
+- Full communications operating system
+
+====================================================
+DEPLOYMENT REQUIREMENTS
+====================================================
+
+Connect and configure:
+1. GitHub
+2. Supabase
+3. Cloudflare Workers
+4. Cloudflare Pages
+
+Deployment Rules:
+- Zero downtime deployments
+- Edge optimized
+- Environment variable validation
+- Safe rollback support
+- Build verification before push
+- Auto deployment on main branch
+
+====================================================
+SECURITY REQUIREMENTS
+====================================================
+
+Implement:
+- RLS-safe queries
+- Rate limiting
+- OTP abuse prevention
+- Secure cookies
+- JWT validation
+- Edge request validation
+- Session expiration handling
+- Audit logging
+- CSP headers
+- Cloudflare protection
+
+====================================================
+FINAL EXECUTION REQUIREMENTS
+====================================================
+
+Before every push:
+1. Run typecheck
+2. Run build
+3. Verify Worker deployment
+4. Verify Supabase connectivity
+5. Verify GitHub Actions
+6. Verify OTP delivery
+7. Verify mobile responsiveness
+8. Verify dark theme consistency
+
+Never push broken code.
+
+If architecture improvements are needed:
+- Explain changes first
+- Preserve compatibility
+- Keep deployment operational
+
+Goal:
+Production-ready Loop Messenger MVP launching today with scalable RALD infrastructure for future V2-V5 expansion.
