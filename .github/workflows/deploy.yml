@@ -106,7 +106,9 @@ jobs:
           bunx wrangler deploy --dry-run --outdir .wrangler-build 2>&1 || true
           if [ -f .wrangler-build/index.js ]; then
             cp .wrangler-build/index.js dist/client/_worker.js
-            echo 'Worker bundled for Pages SSR'
+            # Copy server-side asset chunks _worker.js references at runtime
+            if [ -d .wrangler-build/assets ]; then cp -r .wrangler-build/assets/. dist/client/assets/; fi
+            if [ -d dist/server/assets ]; then cp dist/server/assets/*.js dist/client/assets/ 2>/dev/null || true; fi
           else
             echo 'Worker bundle not found - using SPA fallback'
             echo '/* /index.html 200' > dist/client/_redirects
@@ -118,7 +120,8 @@ jobs:
           bunx wrangler pages deploy dist/client \
             --project-name=messenger \
             --branch=main \
-            --commit-dirty=true
+            --commit-dirty=true \
+            --compatibility-flags=nodejs_compat
       - name: Push runtime secrets to Pages project
         run: |
           echo "${{ secrets.TERMII_API_KEY }}"            | bunx wrangler pages secret put TERMII_API_KEY            --project-name=messenger
