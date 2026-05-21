@@ -64,44 +64,31 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Inspect build output
+      - name: Prepare Pages bundle
         run: |
-          echo "=== dist layout ===" && find dist -type f | sort || true
+          # Vite splits the server build into dist/server/index.js + dist/server/assets/*.js
+          # Pages needs _worker.js and all its imports present in dist/client/
+          cp dist/server/index.js dist/client/_worker.js
+          cp -r dist/server/assets/. dist/client/assets/
+          echo "Pages bundle ready:"
+          echo "  _worker.js: $(wc -c < dist/client/_worker.js) bytes"
+          echo "  assets:     $(ls dist/client/assets/ | wc -l) files"
 
-      - name: Bundle SSR worker into _worker.js
+      - name: Set Pages compatibility flags via CF API
         run: |
-          set -e
-          # Priority 1 – Vite/cloudflare-plugin direct output
-          if [ -f dist/worker/index.js ]; then
-            cp dist/worker/index.js dist/client/_worker.js
-            echo "✅ Bundled from dist/worker/index.js"
-          # Priority 2 – TanStack Start server preset
-          elif [ -f dist/server/index.js ]; then
-            cp dist/server/index.js dist/client/_worker.js
-            echo "✅ Bundled from dist/server/index.js"
-          # Priority 3 – wrangler dry-run (no assets = no 10000 error)
-          else
-            echo "Falling back to wrangler dry-run..."
-            bunx wrangler deploy --dry-run --outdir .wrangler-build 2>&1
-            if [ -f .wrangler-build/index.js ]; then
-              cp .wrangler-build/index.js dist/client/_worker.js
-              echo "✅ Bundled from wrangler dry-run"
-            else
-              echo "⚠️  No worker bundle found — Pages will serve as static SPA"
-              echo '/* /index.html 200' > dist/client/_redirects
-            fi
-          fi
-
-      - name: Create Pages project (idempotent)
-        run: bunx wrangler pages project create messenger --production-branch=main 2>&1 || true
+          curl -s -X PATCH \
+            "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/pages/projects/messenger" \
+            -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"deployment_configs":{"production":{"compatibility_flags":["nodejs_compat"],"compatibility_date":"2025-09-24"},"preview":{"compatibility_flags":["nodejs_compat"],"compatibility_date":"2025-09-24"}}}' \
+            | grep -o '"success":[^,}]*' || true
 
       - name: Deploy to Cloudflare Pages
         run: |
           bunx wrangler pages deploy dist/client \
             --project-name=messenger \
             --branch=main \
-            --commit-dirty=true \
-            
+            --commit-dirty=true
 
       - name: Push runtime secrets to Pages
         run: |
