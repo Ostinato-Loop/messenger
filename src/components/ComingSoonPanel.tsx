@@ -33,7 +33,7 @@ export function ComingSoonPanel({ title, subtitle, icon, hint }: Props) {
       >
         <div className="relative mb-6 flex h-24 w-24 items-center justify-center rounded-3xl glass-raised">
           <div className="absolute inset-0 -z-10 rounded-3xl bg-primary/15 blur-2xl animate-breathe" />
-          <div className="text-primary-foreground" style={{ color: "oklch(0.78 0.18 300)" }}>
+          <div className="text-primary-foreground" style={{ color: "oklch(0.92 0.30 122)" }}>
             {icon}
           </div>
         </div>
