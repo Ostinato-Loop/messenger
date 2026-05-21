@@ -66,7 +66,6 @@ jobs:
       - name: Push runtime secrets to Worker
         run: |
           echo "${{ secrets.TERMII_API_KEY }}"            | bunx wrangler secret put TERMII_API_KEY
-          echo "${{ secrets.SUPABASE_URL }}"              | bunx wrangler secret put SUPABASE_URL
           echo "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | bunx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
           echo "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}"  | bunx wrangler secret put SUPABASE_PUBLISHABLE_KEY
           echo "${{ secrets.TENCENT_SDKAPPID }}"          | bunx wrangler secret put TENCENT_SDKAPPID
@@ -123,7 +122,6 @@ jobs:
       - name: Push runtime secrets to Pages project
         run: |
           echo "${{ secrets.TERMII_API_KEY }}"            | bunx wrangler pages secret put TERMII_API_KEY            --project-name=messenger
-          echo "${{ secrets.SUPABASE_URL }}"              | bunx wrangler pages secret put SUPABASE_URL              --project-name=messenger
           echo "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | bunx wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY --project-name=messenger
           echo "${{ secrets.SUPABASE_PUBLISHABLE_KEY }}"  | bunx wrangler pages secret put SUPABASE_PUBLISHABLE_KEY  --project-name=messenger
           echo "${{ secrets.TENCENT_SDKAPPID }}"          | bunx wrangler pages secret put TENCENT_SDKAPPID          --project-name=messenger
