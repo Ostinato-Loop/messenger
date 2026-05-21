@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: deploy-worker
-  cancel-in-progress: false   # never cancel an in-flight deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -31,15 +31,17 @@ jobs:
         run: bun run build
         env:
           # Public Supabase vars baked into the client bundle
-          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          # Worker env (non-secret) already in wrangler.jsonc [vars]
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
 
       - name: Deploy via Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Server-side secrets injected into the Worker runtime
+          # Server-side secrets injected into the Worker runtime via wrangler secret put
           secrets: |
             TERMII_API_KEY
             SUPABASE_SERVICE_ROLE_KEY
@@ -48,4 +50,3 @@ jobs:
           TERMII_API_KEY: ${{ secrets.TERMII_API_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          # Non-sensitive vars are set in wrangler.jsonc [vars] — no need to pass as secrets
