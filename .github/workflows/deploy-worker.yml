@@ -19,6 +19,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -30,10 +35,8 @@ jobs:
       - name: Build
         run: bun run build
         env:
-          # Public Supabase vars baked into the client bundle
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          # Worker env (non-secret) already in wrangler.jsonc [vars]
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
 
       - name: Deploy via Wrangler
@@ -41,7 +44,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Server-side secrets injected into the Worker runtime via wrangler secret put
           secrets: |
             TERMII_API_KEY
             SUPABASE_SERVICE_ROLE_KEY
