@@ -11,10 +11,10 @@ type Tab = {
 
 const LEFT: Tab[] = [
   { to: "/updates", label: "Updates", Icon: Sparkles },
-  { to: "/calls", label: "Calls", Icon: PhoneCall },
+  { to: "/calls",   label: "Voice",   Icon: PhoneCall },
 ];
 const RIGHT: Tab[] = [
-  { to: "/chats", label: "Chats", Icon: MessageCircle },
+  { to: "/chats",   label: "Chats",   Icon: MessageCircle },
   { to: "/profile", label: "Profile", Icon: User },
 ];
 
@@ -60,6 +60,7 @@ function TabButton({ tab, active }: { tab: Tab; active: boolean }) {
 export function BottomNav() {
   const { pathname } = useLocation();
   const isActive = (p: string) => pathname === p || pathname.startsWith(p + "/");
+  const loopActive = isActive("/loop");
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 safe-bottom pointer-events-none">
@@ -71,15 +72,20 @@ export function BottomNav() {
             ))}
           </div>
 
-          {/* Center Loop button */}
+          {/* Center Loop button — only pulses when user taps it (loopActive) */}
           <div className="relative flex w-20 items-center justify-center">
             <Link
               to="/loop"
-              aria-label="Open Loop"
-              className="absolute -top-7 flex h-16 w-16 items-center justify-center rounded-full animate-pulse-glow"
-              style={{ background: "var(--gradient-purple)" }}
+              aria-label="Open Loop Spaces"
+              className="absolute -top-7 flex h-16 w-16 items-center justify-center rounded-full transition-transform active:scale-95"
+              style={{
+                background: "var(--gradient-primary)",
+                boxShadow: loopActive
+                  ? "0 0 0 0 oklch(0.92 0.30 122 / 0.4), 0 0 28px 8px oklch(0.92 0.30 122 / 0.35)"
+                  : "0 0 24px 2px oklch(0.92 0.30 122 / 0.18)",
+                animation: loopActive ? "pulseGlow 3.2s ease-in-out infinite" : "none",
+              }}
             >
-              <div className="absolute inset-0 rounded-full opacity-60 blur-xl" style={{ background: "var(--gradient-purple)" }} />
               <LoopMark size={36} animated={false} className="relative" />
             </Link>
           </div>

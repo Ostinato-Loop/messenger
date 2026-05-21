@@ -12,7 +12,7 @@ export const Route = createFileRoute("/login")({
   ssr: false,
 });
 
-type Mode = "signin" | "join" | "reset";
+type Mode = "signin" | "join";
 type Step = "phone" | "otp";
 type BoxState = "idle" | "typing" | "error" | "success";
 
@@ -92,7 +92,7 @@ export default function LoginPage() {
     setTimeout(() => setShaking(false), 600);
   }
 
-  // ── Send OTP via RALD/Termii (no Supabase Twilio) ────────────────────────
+  // ── Send OTP via RALD/Termii ─────────────────────────────────────────────
   async function handleSendCode(e: React.FormEvent) {
     e.preventDefault();
     const p = cleanPhone();
@@ -100,16 +100,11 @@ export default function LoginPage() {
     setLoading(true);
     setBoxState("typing");
 
-    const endpoint =
-      mode === "signin" ? "/api/auth/send-otp"
-      : mode === "join"  ? "/api/auth/send-otp"
-      :                    "/api/auth/send-otp";
-
-    const { ok, data } = await raldFetch(endpoint, { phone: p, mode });
+    const { ok, data } = await raldFetch("/api/auth/send-otp", { phone: p, mode });
     setLoading(false);
 
     if (!ok) {
-      toast.error((data.error as string) || "Failed to send code");
+      toast.error((data.error as string) || "Failed to send code — check your number");
       setBoxState("error");
       shake();
       return;
@@ -137,7 +132,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (!ok) {
-      toast.error((data.error as string) || "Invalid code");
+      toast.error((data.error as string) || "Wrong code — try again");
       setBoxState("error");
       shake();
       return;
@@ -159,28 +154,23 @@ export default function LoginPage() {
   }
 
   const isPhone = step === "phone";
+
   const modeLabel: Record<Mode, string> = {
     signin: "Welcome back",
-    join:   "Create account",
-    reset:  "Reset access",
+    join:   "Join Loop",
   };
   const modeSubtitle: Record<Mode, string> = {
-    signin: "Enter your phone for a secure one-time code",
-    join:   "Enter your phone to create your Loop account",
-    reset:  "Enter your phone to reset your access",
+    signin: "Enter your phone — we'll send a code",
+    join:   "Your phone is your identity on Loop",
   };
 
   return (
     <div className="relative flex min-h-dvh flex-col items-center justify-center px-5 py-10 safe-top safe-bottom overflow-hidden">
-      {/* Neon lemon background orb */}
+      {/* Background glow — neon lemon only */}
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div
           className="absolute -top-40 left-1/2 h-[70vmin] w-[70vmin] -translate-x-1/2 rounded-full animate-breathe"
-          style={{ background: "radial-gradient(ellipse, oklch(0.92 0.30 122 / 0.12) 0%, transparent 70%)" }}
-        />
-        <div
-          className="absolute -bottom-32 left-1/2 h-[50vmin] w-[50vmin] -translate-x-1/2 rounded-full animate-breathe"
-          style={{ background: "radial-gradient(ellipse, oklch(0.78 0.20 65 / 0.08) 0%, transparent 70%)", animationDelay: "2s" }}
+          style={{ background: "radial-gradient(ellipse, oklch(0.92 0.30 122 / 0.10) 0%, transparent 70%)" }}
         />
       </div>
 
@@ -189,10 +179,16 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="mb-6 flex flex-col items-center gap-2"
+        className="mb-2 flex flex-col items-center gap-2"
       >
-        <LoopMark size={56} />
+        <LoopMark size={52} />
+        <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground/80 mt-1">
+          Audio-first civic platform
+        </p>
       </motion.div>
+
+      {/* Kente accent */}
+      <div className="kente-strip mb-6 w-12" />
 
       {/* RALD AUTH BOX */}
       <motion.div
@@ -208,34 +204,34 @@ export default function LoginPage() {
         <Corner pos="bl" state={boxState} />
         <Corner pos="br" state={boxState} />
 
-        {/* Mode tabs */}
+        {/* Mode tabs — simplified to 2 modes */}
         <div className="mb-5 flex rounded-2xl p-1" style={{ background: "oklch(1 0 0 / 6%)" }}>
-          {(["signin", "join", "reset"] as Mode[]).map((m) => (
+          {(["signin", "join"] as Mode[]).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => { setMode(m); setStep("phone"); setOtp(""); setBoxState("idle"); }}
-              className="flex-1 rounded-xl py-2 text-xs font-semibold transition-all"
+              className="flex-1 rounded-xl py-3 text-sm font-semibold transition-all"
               style={
                 mode === m
                   ? { background: "var(--gradient-primary)", color: "oklch(0.07 0.01 140)" }
                   : { color: "oklch(0.62 0.018 135)" }
               }
             >
-              {m === "signin" ? "Sign In" : m === "join" ? "Create" : "Forgot"}
+              {m === "signin" ? "Sign In" : "Create Account"}
             </button>
           ))}
         </div>
 
         {/* RALD AUTH badge */}
-        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-current px-2.5 py-0.5 text-[10px] font-bold tracking-widest"
+        <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-current px-2.5 py-0.5 text-[10px] font-bold tracking-widest"
           style={{ color: "oklch(0.78 0.20 65)", borderColor: "oklch(0.78 0.20 65 / 0.5)" }}>
           <Shield size={10} />
           RALD AUTH
         </div>
 
         <h2 className="mb-1 text-xl font-bold text-foreground">{modeLabel[mode]}</h2>
-        <p className="mb-5 text-sm text-muted-foreground">{modeSubtitle[mode]}</p>
+        <p className="mb-5 text-sm text-muted-foreground leading-relaxed">{modeSubtitle[mode]}</p>
 
         <AnimatePresence mode="wait">
           {step === "phone" ? (
@@ -248,12 +244,12 @@ export default function LoginPage() {
               onSubmit={handleSendCode}
               className="flex flex-col gap-3"
             >
+              {/* Phone input — large tap target for African mobile */}
               <label
-                className="flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all"
+                className="flex items-center gap-3 rounded-2xl px-4 py-4 transition-all"
                 style={{ background: "oklch(1 0 0 / 7%)", border: "1px solid oklch(1 0 0 / 10%)" }}
-                onClick={() => { if (boxState === "idle" && !phone) setBoxState("typing"); }}
               >
-                <Phone size={17} className="shrink-0 text-muted-foreground" />
+                <Phone size={18} className="shrink-0 text-muted-foreground" />
                 <input
                   ref={phoneRef}
                   type="tel"
@@ -267,26 +263,27 @@ export default function LoginPage() {
                   }}
                   onFocus={() => setBoxState(phone.length > 0 ? "typing" : "typing")}
                   onBlur={() => { if (boxState === "typing") setBoxState("idle"); }}
-                  className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground/50 outline-none min-w-0"
+                  className="flex-1 bg-transparent text-lg text-foreground placeholder:text-muted-foreground/50 outline-none min-w-0"
                 />
               </label>
 
+              {/* Submit — heartbeat ONLY fires after tap (loading state) */}
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold transition-all"
+                className="mt-1 flex items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold transition-all active:scale-[0.97]"
                 style={
                   loading
                     ? { background: "var(--gradient-primary)", animation: "heartbeat 0.85s ease-in-out infinite", color: "oklch(0.07 0.01 140)", boxShadow: "none" }
                     : { background: "var(--gradient-primary)", color: "oklch(0.07 0.01 140)", boxShadow: "var(--shadow-glow)" }
                 }
               >
-                {loading ? "Sending…" : "Send code"}
-                {!loading && <ArrowRight size={15} />}
+                {loading ? "Sending code…" : "Send code"}
+                {!loading && <ArrowRight size={16} />}
               </button>
 
               <p className="mt-2 text-center text-[11px] leading-relaxed text-muted-foreground/70">
-                Continuing means you accept Loop's Terms &amp; Privacy Policy.
+                By continuing you accept Loop's Terms &amp; Privacy Policy
               </p>
             </motion.form>
           ) : (
@@ -299,15 +296,17 @@ export default function LoginPage() {
               onSubmit={handleVerifyOtp}
               className="flex flex-col gap-3"
             >
-              <p className="text-xs text-muted-foreground">
-                Code sent to <span className="font-medium text-foreground">{cleanPhone()}</span>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Code sent to <span className="font-semibold text-foreground">{cleanPhone()}</span>.{" "}
+                Check your SMS.
               </p>
 
+              {/* OTP input — large, numeric keyboard */}
               <label
-                className="flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all"
+                className="flex items-center gap-3 rounded-2xl px-4 py-4 transition-all"
                 style={{ background: "oklch(1 0 0 / 7%)", border: "1px solid oklch(1 0 0 / 10%)" }}
               >
-                <Shield size={17} className="shrink-0 text-muted-foreground" />
+                <Shield size={18} className="shrink-0 text-muted-foreground" />
                 <input
                   ref={otpRef}
                   type="text"
@@ -323,38 +322,39 @@ export default function LoginPage() {
                   }}
                   onFocus={() => setBoxState("typing")}
                   onBlur={() => { if (boxState === "typing") setBoxState("idle"); }}
-                  className="flex-1 bg-transparent text-xl tracking-[0.55em] text-foreground placeholder:text-muted-foreground/40 outline-none min-w-0"
+                  className="flex-1 bg-transparent text-2xl tracking-[0.55em] text-foreground placeholder:text-muted-foreground/40 outline-none min-w-0"
                 />
               </label>
 
+              {/* Submit — heartbeat ONLY fires after tap (loading state) */}
               <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold transition-all"
+                className="flex items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold transition-all active:scale-[0.97]"
                 style={
                   loading
                     ? { background: "var(--gradient-primary)", animation: "heartbeat 0.85s ease-in-out infinite", color: "oklch(0.07 0.01 140)" }
                     : { background: "var(--gradient-primary)", color: "oklch(0.07 0.01 140)", boxShadow: "var(--shadow-glow)" }
                 }
               >
-                {loading ? "Verifying…" : mode === "join" ? "Create account" : mode === "reset" ? "Reset access" : "Continue"}
-                {!loading && <ArrowRight size={15} />}
+                {loading ? "Verifying…" : mode === "join" ? "Create account" : "Enter Loop"}
+                {!loading && <ArrowRight size={16} />}
               </button>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pt-1">
                 <button
                   type="button"
                   onClick={() => { setStep("phone"); setOtp(""); setBoxState("idle"); }}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center gap-1 text-sm text-muted-foreground active:text-foreground transition-colors py-2"
                 >
-                  <ChevronLeft size={13} /> Different number
+                  <ChevronLeft size={14} /> Wrong number
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSendCode({ preventDefault: () => {} } as React.FormEvent)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center gap-1 text-sm text-muted-foreground active:text-foreground transition-colors py-2"
                 >
-                  <RefreshCw size={11} /> Resend
+                  <RefreshCw size={12} /> Resend code
                 </button>
               </div>
             </motion.form>

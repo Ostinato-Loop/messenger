@@ -30,11 +30,10 @@ export function SplashScreen() {
           className="flex flex-col items-center gap-2"
         >
           <h1 className="text-3xl font-semibold tracking-tight">
-            <span className="text-gradient-primary">Loop</span>{" "}
-            <span className="text-foreground/90">Messenger</span>
+            <span className="text-gradient-primary">Loop</span>
           </h1>
           <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-            A new way to stay connected
+            Audio-first civic platform
           </p>
         </motion.div>
       </div>
