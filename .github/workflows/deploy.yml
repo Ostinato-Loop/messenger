@@ -10,9 +10,7 @@ name: CI / Deploy
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
   jobs:
-    # ────────────────────────────────────────────────────────────
-    # 1. Type-check & lint
-    # ────────────────────────────────────────────────────────────
+    # ── 1. Type-check & lint ──────────────────────────────────────────────────
     typecheck:
       name: Type Check & Lint
       runs-on: ubuntu-latest
@@ -36,9 +34,7 @@ name: CI / Deploy
           run: bun run lint
           continue-on-error: true
 
-    # ────────────────────────────────────────────────────────────
-    # 2. Build + Deploy Worker (SSR + API + Cron via Cloudflare Workers)
-    # ────────────────────────────────────────────────────────────
+    # ── 2. Build + Deploy Worker (SSR + API + Cron) ───────────────────────────
     deploy-worker:
       name: Build + Deploy Worker
       runs-on: ubuntu-latest
@@ -75,11 +71,8 @@ name: CI / Deploy
             echo "${{ secrets.TENCENT_SDKAPPID }}"          | bunx wrangler secret put TENCENT_SDKAPPID
             echo "${{ secrets.TENCENT_SECRETKEY }}"         | bunx wrangler secret put TENCENT_SECRETKEY
 
-    # ────────────────────────────────────────────────────────────
-    # 3. Build + Deploy Pages (static CDN + SPA fallback)
-    #    Runs only after Worker succeeds.
+    # ── 3. Build + Deploy Pages (SSR via _worker.js or SPA fallback) ──────────
     #    Pages URL: https://messenger.pages.dev
-    # ────────────────────────────────────────────────────────────
     deploy-pages:
       name: Build + Deploy Pages
       runs-on: ubuntu-latest
@@ -108,20 +101,18 @@ name: CI / Deploy
           run: bun install --frozen-lockfile
         - name: Build
           run: bun run build
-        - name: Bundle Worker for Pages SSR (_worker.js)
+        - name: Bundle Worker for Pages SSR
           run: |
             bunx wrangler deploy --dry-run --outdir .wrangler-build 2>&1 || true
             if [ -f .wrangler-build/index.js ]; then
               cp .wrangler-build/index.js dist/client/_worker.js
-              echo "✅ _worker.js bundled — Pages will serve full SSR"
+              echo "Worker bundled for Pages SSR"
             else
-              echo "⚠️  Worker bundle not found — adding SPA fallback instead"
+              echo "Worker bundle not found - using SPA fallback"
               echo "/* /index.html 200" > dist/client/_redirects
             fi
         - name: Create Pages project (idempotent)
-          run: |
-            bunx wrangler pages project create messenger \
-              --production-branch=main 2>&1 || true
+          run: bunx wrangler pages project create messenger --production-branch=main 2>&1 || true
         - name: Deploy to Cloudflare Pages
           run: |
             bunx wrangler pages deploy dist/client \
@@ -137,9 +128,7 @@ name: CI / Deploy
             echo "${{ secrets.TENCENT_SDKAPPID }}"          | bunx wrangler pages secret put TENCENT_SDKAPPID          --project-name=messenger
             echo "${{ secrets.TENCENT_SECRETKEY }}"         | bunx wrangler pages secret put TENCENT_SECRETKEY         --project-name=messenger
 
-    # ────────────────────────────────────────────────────────────
-    # 4. PR build check (validates build without deploying)
-    # ────────────────────────────────────────────────────────────
+    # ── 4. PR build check (no deploy) ────────────────────────────────────────
     pr-build-check:
       name: PR Build Check
       runs-on: ubuntu-latest
