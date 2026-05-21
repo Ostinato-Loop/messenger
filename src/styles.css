@@ -5,9 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Loop Messenger — African-first warm design system.
- * Primary: Warm amber-gold. Background: deep warm night.
- * All colors in oklch. Use semantic tokens, never raw hex/rgb in components.
+ * Loop Messenger — Neon Lemon design system.
+ * Primary: Neon lemon-green. Background: deep void black.
+ * RALD box corners: amber=typing, green=success, red=error.
  */
 
 @theme inline {
@@ -52,6 +52,7 @@
   --animate-shimmer: shimmer 2.4s linear infinite;
   --animate-shake: shake 0.55s ease both;
   --animate-corner-pulse: cornerPulse 1.8s ease-in-out infinite;
+  --animate-heartbeat: heartbeat 0.85s ease-in-out infinite;
 }
 
 @keyframes breathe {
@@ -59,12 +60,10 @@
   50%       { opacity: 0.9; transform: scale(1.07); filter: blur(34px); }
 }
 @keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 0 0 oklch(0.76 0.18 65 / 0.4), 0 0 28px 4px oklch(0.76 0.18 65 / 0.15); }
-  50%       { box-shadow: 0 0 0 10px oklch(0.76 0.18 65 / 0), 0 0 44px 10px oklch(0.76 0.18 65 / 0.3); }
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.92 0.30 122 / 0.4), 0 0 28px 4px oklch(0.92 0.30 122 / 0.15); }
+  50%       { box-shadow: 0 0 0 10px oklch(0.92 0.30 122 / 0), 0 0 44px 10px oklch(0.92 0.30 122 / 0.3); }
 }
-@keyframes orbit {
-  to { transform: rotate(360deg); }
-}
+@keyframes orbit { to { transform: rotate(360deg); } }
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -74,80 +73,81 @@
   100% { background-position: 200% 0; }
 }
 @keyframes shake {
-  0%, 100%         { transform: translateX(0); }
-  12.5%, 62.5%     { transform: translateX(-5px); }
-  37.5%, 87.5%     { transform: translateX(5px); }
+  0%, 100%     { transform: translateX(0); }
+  12.5%, 62.5% { transform: translateX(-5px); }
+  37.5%, 87.5% { transform: translateX(5px); }
 }
 @keyframes cornerPulse {
   0%, 100% { opacity: 0.7; }
   50%      { opacity: 1; }
 }
+@keyframes heartbeat {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0   oklch(0.92 0.30 122 / 0.55); }
+  14%  { transform: scale(1.04); box-shadow: 0 0 0 6px oklch(0.92 0.30 122 / 0.30); }
+  28%  { transform: scale(0.98); box-shadow: 0 0 0 3px oklch(0.92 0.30 122 / 0.15); }
+  42%  { transform: scale(1.03); box-shadow: 0 0 0 9px oklch(0.92 0.30 122 / 0.20); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 12px oklch(0.92 0.30 122 / 0); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0   oklch(0.92 0.30 122 / 0); }
+}
 
 :root {
   --radius: 1rem;
 
-  /* Deep warm night — African midnight sky */
-  --background: oklch(0.09 0.014 45);
-  --foreground: oklch(0.97 0.008 65);
+  /* Deep void — pure night */
+  --background: oklch(0.08 0.010 140);
+  --foreground: oklch(0.97 0.008 130);
 
-  --surface: oklch(0.13 0.018 48);
-  --surface-raised: oklch(0.17 0.022 50);
+  --surface: oklch(0.12 0.014 138);
+  --surface-raised: oklch(0.16 0.018 135);
 
-  --card: oklch(0.14 0.020 48);
-  --card-foreground: oklch(0.97 0.008 65);
-  --popover: oklch(0.13 0.020 48);
-  --popover-foreground: oklch(0.97 0.008 65);
+  --card: oklch(0.13 0.015 138);
+  --card-foreground: oklch(0.97 0.008 130);
+  --popover: oklch(0.12 0.015 138);
+  --popover-foreground: oklch(0.97 0.008 130);
 
-  /* Warm amber-gold — African gold */
-  --primary: oklch(0.76 0.18 65);
-  --primary-foreground: oklch(0.09 0.01 45);
-  --primary-glow: oklch(0.80 0.20 62);
+  /* NEON LEMON GREEN */
+  --primary: oklch(0.92 0.30 122);
+  --primary-foreground: oklch(0.07 0.01 140);
+  --primary-glow: oklch(0.95 0.32 118);
 
-  --secondary: oklch(0.22 0.030 50);
-  --secondary-foreground: oklch(0.97 0.008 65);
+  --secondary: oklch(0.19 0.022 138);
+  --secondary-foreground: oklch(0.97 0.008 130);
 
-  --muted: oklch(0.21 0.022 50);
-  --muted-foreground: oklch(0.62 0.022 55);
+  --muted: oklch(0.19 0.018 138);
+  --muted-foreground: oklch(0.60 0.018 135);
 
-  --accent: oklch(0.28 0.055 60);
-  --accent-foreground: oklch(0.97 0.008 65);
+  --accent: oklch(0.23 0.045 128);
+  --accent-foreground: oklch(0.97 0.008 130);
 
   --destructive: oklch(0.62 0.22 25);
   --destructive-foreground: oklch(0.99 0.005 25);
 
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 11%);
-  --ring: oklch(0.76 0.18 65 / 55%);
+  --ring: oklch(0.92 0.30 122 / 55%);
 
-  /* Forest green for online/live indicators */
-  --live: oklch(0.72 0.2 145);
+  --live: oklch(0.82 0.26 142);
 
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  /* Warm aurora — African sunrise/sunset */
   --gradient-aurora:
-    radial-gradient(ellipse at 15% 0%, oklch(0.50 0.16 65 / 0.30), transparent 52%),
-    radial-gradient(ellipse at 85% 100%, oklch(0.38 0.14 45 / 0.22), transparent 58%),
-    radial-gradient(ellipse at 50% 50%, oklch(0.28 0.08 55 / 0.15), transparent 70%);
+    radial-gradient(ellipse at 15% 0%, oklch(0.45 0.18 122 / 0.22), transparent 52%),
+    radial-gradient(ellipse at 85% 100%, oklch(0.35 0.14 140 / 0.16), transparent 58%),
+    radial-gradient(ellipse at 50% 50%, oklch(0.22 0.08 130 / 0.10), transparent 70%);
 
-  /* Primary gradient — warm amber to golden orange */
-  --gradient-primary: linear-gradient(135deg, oklch(0.72 0.20 58), oklch(0.82 0.18 72));
-
-  /* Legacy alias — keeps existing components working */
+  --gradient-primary: linear-gradient(135deg, oklch(0.88 0.28 125), oklch(0.95 0.32 115));
   --gradient-purple: var(--gradient-primary);
 
-  --shadow-glow: 0 0 40px -8px oklch(0.76 0.18 65 / 0.5);
-  --shadow-glass: 0 8px 32px -8px oklch(0.08 0.01 45 / 0.65);
+  --shadow-glow: 0 0 40px -8px oklch(0.92 0.30 122 / 0.5);
+  --shadow-glass: 0 8px 32px -8px oklch(0.05 0.01 140 / 0.65);
 }
 
 .dark { color-scheme: dark; }
 
 @layer base {
   * { border-color: var(--color-border); }
-
   html, body, #root { height: 100%; }
-
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
@@ -158,12 +158,8 @@
     background-attachment: fixed;
     overflow-x: hidden;
   }
-
   h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
-
-  ::selection { background: oklch(0.76 0.18 65 / 0.30); }
-
-  /* Minimum touch target size for phones */
+  ::selection { background: oklch(0.92 0.30 122 / 0.30); }
   button, a[role="button"], [role="tab"] {
     min-height: 44px;
     min-width: 44px;
@@ -171,13 +167,10 @@
     align-items: center;
     justify-content: center;
   }
-  button:where(.flex-col, .flex-row), a:where(.flex-col, .flex-row) {
-    display: flex;
-  }
+  button:where(.flex-col, .flex-row), a:where(.flex-col, .flex-row) { display: flex; }
 }
 
 @layer components {
-  /* Glassmorphism — reduced blur for 3G performance */
   .glass {
     background: color-mix(in oklab, var(--surface) 78%, transparent);
     backdrop-filter: blur(14px) saturate(130%);
@@ -191,51 +184,41 @@
     border: 1px solid var(--border);
     box-shadow: var(--shadow-glass);
   }
-
-  /* Text gradients */
   .text-gradient-primary {
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
-  /* Legacy alias — same properties, no @apply (Tailwind v4) */
   .text-gradient-purple {
     background: var(--gradient-primary);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
-
   .glow-ring {
-    box-shadow: 0 0 0 1px oklch(0.76 0.18 65 / 0.40), var(--shadow-glow);
+    box-shadow: 0 0 0 1px oklch(0.92 0.30 122 / 0.40), var(--shadow-glow);
   }
   .neon-divider {
     height: 1px;
-    background: linear-gradient(90deg, transparent, oklch(0.76 0.18 65 / 0.45), transparent);
+    background: linear-gradient(90deg, transparent, oklch(0.92 0.30 122 / 0.45), transparent);
   }
-
-  /* Kente accent strip — decorative */
   .kente-strip {
     height: 3px;
     background: linear-gradient(
       90deg,
       oklch(0.72 0.22 25),
-      oklch(0.76 0.18 65),
+      oklch(0.92 0.30 122),
       oklch(0.72 0.20 145),
-      oklch(0.76 0.18 65),
+      oklch(0.92 0.30 122),
       oklch(0.72 0.22 25)
     );
     border-radius: 999px;
   }
-
-  /* RALD Auth box states */
-  .auth-box-corner {
+  /* Heartbeat button — replaces all spinners/loaders */
+  .btn-heartbeat {
+    animation: var(--animate-heartbeat);
     pointer-events: none;
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    transition: border-color 0.3s ease, filter 0.3s ease;
   }
 }
 
@@ -244,9 +227,8 @@
   .scrollbar-none { scrollbar-width: none; }
   .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
   .safe-top    { padding-top: max(env(safe-area-inset-top), 0px); }
-  .animate-shake { animation: var(--animate-shake); }
-
-  /* Reduce animations on slow devices */
+  .animate-shake     { animation: var(--animate-shake); }
+  .animate-heartbeat { animation: var(--animate-heartbeat); }
   @media (prefers-reduced-motion: reduce) {
     *, ::before, ::after {
       animation-duration: 0.01ms !important;

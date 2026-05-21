@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { ArrowRight, ChevronLeft, Phone, RefreshCw, Shield } from "lucide-react";
 
 import { LoopMark } from "@/components/LoopMark";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/login")({
@@ -19,31 +18,32 @@ type BoxState = "idle" | "typing" | "error" | "success";
 
 const RALD_API = import.meta.env.VITE_RALD_API_URL || "";
 
+// ── RALD corner state colours ──────────────────────────────────────────────
+// idle=transparent, typing=amber, error=red, success=green
 const CORNER: Record<BoxState, { border: string; filter: string }> = {
   idle:    { border: "2.5px solid oklch(1 0 0 / 14%)",        filter: "none" },
-  typing:  { border: "2.5px solid oklch(0.78 0.20 65)",       filter: "drop-shadow(0 0 6px oklch(0.78 0.20 65 / 0.75))" },
-  error:   { border: "2.5px solid oklch(0.62 0.22 25)",       filter: "drop-shadow(0 0 7px oklch(0.62 0.22 25 / 0.80))" },
-  success: { border: "2.5px solid oklch(0.72 0.20 145)",      filter: "drop-shadow(0 0 6px oklch(0.72 0.20 145 / 0.75))" },
+  typing:  { border: "2.5px solid oklch(0.78 0.20 65)",       filter: "drop-shadow(0 0 6px oklch(0.78 0.20 65 / 0.80))" },
+  error:   { border: "2.5px solid oklch(0.62 0.22 25)",       filter: "drop-shadow(0 0 7px oklch(0.62 0.22 25 / 0.85))" },
+  success: { border: "2.5px solid oklch(0.72 0.20 145)",      filter: "drop-shadow(0 0 6px oklch(0.72 0.20 145 / 0.80))" },
 };
 
 const BOX_SHADOW: Record<BoxState, string> = {
   idle:    "none",
-  typing:  "0 0 0 1px oklch(0.78 0.20 65 / 0.20), 0 0 40px -6px oklch(0.78 0.20 65 / 0.16)",
-  error:   "0 0 0 1px oklch(0.62 0.22 25 / 0.32), 0 0 40px -6px oklch(0.62 0.22 25 / 0.22)",
-  success: "0 0 0 1px oklch(0.72 0.20 145 / 0.32), 0 0 40px -6px oklch(0.72 0.20 145 / 0.20)",
+  typing:  "0 0 0 1px oklch(0.78 0.20 65 / 0.22), 0 0 40px -6px oklch(0.78 0.20 65 / 0.18)",
+  error:   "0 0 0 1px oklch(0.62 0.22 25 / 0.35), 0 0 40px -6px oklch(0.62 0.22 25 / 0.25)",
+  success: "0 0 0 1px oklch(0.72 0.20 145 / 0.35), 0 0 40px -6px oklch(0.72 0.20 145 / 0.22)",
 };
 
 function Corner({ pos, state }: { pos: "tl" | "tr" | "bl" | "br"; state: BoxState }) {
   const c = CORNER[state];
-  const R = "1.5rem 0 0 0";
   const style: React.CSSProperties = {
-    position: "absolute", width: 26, height: 26,
+    position: "absolute", width: 28, height: 28,
     transition: "all 0.3s ease",
     filter: c.filter,
-    ...(pos === "tl" && { top: 0, left: 0, borderTop: c.border, borderLeft: c.border, borderRadius: R }),
-    ...(pos === "tr" && { top: 0, right: 0, borderTop: c.border, borderRight: c.border, borderRadius: R.split(" ").reverse().join(" ") }),
-    ...(pos === "bl" && { bottom: 0, left: 0, borderBottom: c.border, borderLeft: c.border, borderRadius: `0 0 0 1.5rem` }),
-    ...(pos === "br" && { bottom: 0, right: 0, borderBottom: c.border, borderRight: c.border, borderRadius: `0 0 1.5rem 0` }),
+    ...(pos === "tl" && { top: 0, left: 0,   borderTop: c.border, borderLeft: c.border,   borderRadius: "1.5rem 0 0 0" }),
+    ...(pos === "tr" && { top: 0, right: 0,  borderTop: c.border, borderRight: c.border,  borderRadius: "0 1.5rem 0 0" }),
+    ...(pos === "bl" && { bottom: 0, left: 0,  borderBottom: c.border, borderLeft: c.border,  borderRadius: "0 0 0 1.5rem" }),
+    ...(pos === "br" && { bottom: 0, right: 0, borderBottom: c.border, borderRight: c.border, borderRadius: "0 0 1.5rem 0" }),
   };
   return <span aria-hidden="true" style={style} />;
 }
@@ -61,7 +61,7 @@ async function raldFetch(path: string, body: Record<string, string>) {
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { session, profile, hydrated } = useAuth();
+  const { session, profile, hydrated, setSession } = useAuth();
 
   const [mode, setMode] = useState<Mode>("signin");
   const [step, setStep] = useState<Step>("phone");
@@ -69,11 +69,10 @@ export default function LoginPage() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [boxState, setBoxState] = useState<BoxState>("idle");
-  const [failCount, setFailCount] = useState(0);
   const [shaking, setShaking] = useState(false);
 
   const phoneRef = useRef<HTMLInputElement>(null);
-  const otpRef = useRef<HTMLInputElement>(null);
+  const otpRef   = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!hydrated || !session) return;
@@ -88,209 +87,173 @@ export default function LoginPage() {
     return p.startsWith("+") ? p : `+${p.replace(/\D/g, "")}`;
   };
 
-  function shake() { setShaking(true); setTimeout(() => setShaking(false), 650); }
-
-  function switchMode(m: Mode) {
-    setMode(m);
-    setStep("phone");
-    setBoxState(phone.trim() ? "typing" : "idle");
-    setOtp("");
-    setFailCount(0);
+  function shake() {
+    setShaking(true);
+    setTimeout(() => setShaking(false), 600);
   }
 
-  async function sendOtp(e: React.FormEvent) {
+  // ── Send OTP via RALD/Termii (no Supabase Twilio) ────────────────────────
+  async function handleSendCode(e: React.FormEvent) {
     e.preventDefault();
-    if (!phone.trim() || loading) return;
+    const p = cleanPhone();
+    if (p.length < 8) { toast.error("Enter a valid phone number"); shake(); setBoxState("error"); return; }
     setLoading(true);
-    const { ok, data } = await raldFetch("/api/auth/send-otp", { phone: cleanPhone() });
+    setBoxState("typing");
+
+    const endpoint =
+      mode === "signin" ? "/api/auth/send-otp"
+      : mode === "join"  ? "/api/auth/send-otp"
+      :                    "/api/auth/send-otp";
+
+    const { ok, data } = await raldFetch(endpoint, { phone: p, mode });
     setLoading(false);
+
     if (!ok) {
+      toast.error((data.error as string) || "Failed to send code");
       setBoxState("error");
       shake();
-      toast.error((data.error as string) || "Failed to send code");
       return;
     }
-    toast.success("Code sent via RALD Auth ✓");
-    setStep("otp");
-    setBoxState("typing");
+    setBoxState("success");
+    toast.success("Code sent to " + p);
+    setTimeout(() => {
+      setStep("otp");
+      setBoxState("idle");
+    }, 400);
   }
 
-  async function verifyOtp(e: React.FormEvent) {
+  // ── Verify OTP via RALD ──────────────────────────────────────────────────
+  async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault();
-    if (otp.length < 4 || loading) return;
+    if (otp.length < 6) { toast.error("Enter the 6-digit code"); shake(); setBoxState("error"); return; }
     setLoading(true);
+    setBoxState("typing");
+
     const { ok, data } = await raldFetch("/api/auth/verify-otp", {
       phone: cleanPhone(),
       otp: otp.trim(),
+      mode,
     });
     setLoading(false);
 
     if (!ok) {
-      const n = failCount + 1;
-      setFailCount(n);
+      toast.error((data.error as string) || "Invalid code");
       setBoxState("error");
       shake();
-      toast.error((data.error as string) || `Wrong code · ${3 - n} attempt${3 - n !== 1 ? "s" : ""} left`);
-      return;
-    }
-
-    const token = data.token as string | undefined;
-    if (!token) {
-      setBoxState("error");
-      toast.error("Auth error — no token received");
       return;
     }
 
     setBoxState("success");
-
-    const { error: vErr } = await supabase.auth.verifyOtp({
-      token_hash: token,
-      type: "magiclink",
-    });
-
-    if (vErr) {
-      console.error("[RALD] session error:", vErr);
-      setBoxState("error");
-      toast.error("Session error — please try again");
-      return;
+    // RALD returns a Supabase session token — hydrate it
+    if (data.access_token && typeof data.access_token === "string") {
+      const { createClient } = await import("@supabase/supabase-js");
+      const url = import.meta.env.VITE_SUPABASE_URL as string;
+      const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+      const sb = createClient(url, key);
+      await sb.auth.setSession({
+        access_token: data.access_token as string,
+        refresh_token: (data.refresh_token as string) || "",
+      });
     }
-
-    toast.success("Welcome to Loop");
+    toast.success(mode === "join" ? "Welcome to Loop!" : "Welcome back!");
   }
 
-  async function resendCode() {
-    if (!phone || loading) return;
-    setLoading(true);
-    const { ok, data } = await raldFetch("/api/auth/resend-otp", { phone: cleanPhone() });
-    setLoading(false);
-    if (!ok) { toast.error((data.error as string) || "Failed to resend"); return; }
-    setFailCount(0); setOtp(""); setBoxState("typing");
-    toast.success("New code sent");
-  }
-
-  const TABS: { id: Mode; label: string }[] = [
-    { id: "signin", label: "Sign In" },
-    { id: "join",   label: "Create"  },
-    { id: "reset",  label: "Forgot"  },
-  ];
-
-  const HEADER = {
-    signin: { phone: "Welcome back", otp: "Verify your number" },
-    join:   { phone: "Join Loop",    otp: "Verify your number" },
-    reset:  { phone: "Reset access", otp: "Enter your code"   },
-  } as const;
+  const isPhone = step === "phone";
+  const modeLabel: Record<Mode, string> = {
+    signin: "Welcome back",
+    join:   "Create account",
+    reset:  "Reset access",
+  };
+  const modeSubtitle: Record<Mode, string> = {
+    signin: "Enter your phone for a secure one-time code",
+    join:   "Enter your phone to create your Loop account",
+    reset:  "Enter your phone to reset your access",
+  };
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center px-5 py-10 safe-top safe-bottom overflow-hidden">
-      {/* Background glows */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div style={{ position: "absolute", top: "-30%", left: "50%", transform: "translateX(-50%)", width: "80vmin", height: "80vmin", borderRadius: "50%", background: "radial-gradient(circle, oklch(0.76 0.18 65 / 0.16), transparent 68%)" }} />
-        <div style={{ position: "absolute", bottom: "-15%", right: "-8%", width: "50vmin", height: "50vmin", borderRadius: "50%", background: "radial-gradient(circle, oklch(0.58 0.18 145 / 0.10), transparent 70%)" }} />
+    <div className="relative flex min-h-dvh flex-col items-center justify-center px-5 py-10 safe-top safe-bottom overflow-hidden">
+      {/* Neon lemon background orb */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div
+          className="absolute -top-40 left-1/2 h-[70vmin] w-[70vmin] -translate-x-1/2 rounded-full animate-breathe"
+          style={{ background: "radial-gradient(ellipse, oklch(0.92 0.30 122 / 0.12) 0%, transparent 70%)" }}
+        />
+        <div
+          className="absolute -bottom-32 left-1/2 h-[50vmin] w-[50vmin] -translate-x-1/2 rounded-full animate-breathe"
+          style={{ background: "radial-gradient(ellipse, oklch(0.78 0.20 65 / 0.08) 0%, transparent 70%)", animationDelay: "2s" }}
+        />
       </div>
 
-      {/* Brand */}
+      {/* Logo */}
       <motion.div
-        initial={{ opacity: 0, y: -22 }}
+        initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="mb-8 flex flex-col items-center gap-3"
+        transition={{ duration: 0.5 }}
+        className="mb-6 flex flex-col items-center gap-2"
       >
-        <div className="relative">
-          <div aria-hidden="true" style={{ position: "absolute", inset: -14, borderRadius: "50%", background: "oklch(0.76 0.18 65 / 0.22)", filter: "blur(22px)", animation: "breathe 4.5s ease-in-out infinite" }} />
-          <LoopMark size={70} className="relative" />
-        </div>
-        <div className="text-center">
-          <h1 className="text-[26px] font-bold tracking-tight">
-            <span className="text-gradient-primary">Loop</span> Messenger
-          </h1>
-          <p className="mt-0.5 text-[10px] uppercase tracking-[0.34em] text-muted-foreground/80">
-            A LILCKY STUDIO product
-          </p>
-        </div>
+        <LoopMark size={56} />
       </motion.div>
 
-      {/* ─── RALD Auth Box ─── */}
+      {/* RALD AUTH BOX */}
       <motion.div
-        initial={{ opacity: 0, y: 26, scale: 0.96 }}
-        animate={{
-          opacity: 1, y: 0, scale: 1,
-          x: shaking ? [0, -7, 7, -7, 7, -5, 5, -2, 2, 0] : 0,
-        }}
-        transition={{
-          duration: 0.5, ease: [0.22, 1, 0.36, 1],
-          x: { duration: 0.55, times: [0, .1, .2, .3, .4, .5, .6, .7, .85, 1] },
-        }}
-        style={{
-          position: "relative",
-          width: "100%",
-          maxWidth: 368,
-          borderRadius: "1.5rem",
-          padding: "1.5rem",
-          background: "color-mix(in oklab, oklch(0.13 0.018 45) 90%, transparent)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          border: "1px solid oklch(1 0 0 / 8%)",
-          boxShadow: BOX_SHADOW[boxState],
-          transition: "box-shadow 0.35s ease",
-        }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        className={`relative w-full max-w-sm rounded-3xl p-6 glass-raised transition-all duration-300${shaking ? " animate-shake" : ""}`}
+        style={{ boxShadow: BOX_SHADOW[boxState] }}
       >
+        {/* Corner accent brackets */}
         <Corner pos="tl" state={boxState} />
         <Corner pos="tr" state={boxState} />
         <Corner pos="bl" state={boxState} />
         <Corner pos="br" state={boxState} />
 
         {/* Mode tabs */}
-        <div style={{ display: "flex", borderRadius: "1rem", background: "oklch(1 0 0 / 6%)", padding: 4, marginBottom: "1.4rem" }}>
-          {TABS.map((t) => (
+        <div className="mb-5 flex rounded-2xl p-1" style={{ background: "oklch(1 0 0 / 6%)" }}>
+          {(["signin", "join", "reset"] as Mode[]).map((m) => (
             <button
-              key={t.id}
-              onClick={() => switchMode(t.id)}
-              style={{
-                flex: 1,
-                borderRadius: "0.75rem",
-                padding: "0.5rem 0",
-                fontSize: 13,
-                fontWeight: 700,
-                transition: "all 0.2s ease",
-                minHeight: 36,
-                ...(mode === t.id
-                  ? { background: "var(--gradient-primary)", color: "oklch(0.09 0.01 45)", boxShadow: "0 2px 16px oklch(0.76 0.18 65 / 0.40)" }
-                  : { color: "oklch(0.60 0.022 55)", background: "transparent" }),
-              }}
+              key={m}
+              type="button"
+              onClick={() => { setMode(m); setStep("phone"); setOtp(""); setBoxState("idle"); }}
+              className="flex-1 rounded-xl py-2 text-xs font-semibold transition-all"
+              style={
+                mode === m
+                  ? { background: "var(--gradient-primary)", color: "oklch(0.07 0.01 140)" }
+                  : { color: "oklch(0.62 0.018 135)" }
+              }
             >
-              {t.label}
+              {m === "signin" ? "Sign In" : m === "join" ? "Create" : "Forgot"}
             </button>
           ))}
         </div>
 
-        {/* Header */}
-        <div style={{ marginBottom: "1.25rem" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "oklch(0.76 0.18 65 / 0.12)", color: "oklch(0.76 0.18 65)", borderRadius: 999, padding: "2px 10px", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.28em" }}>
-            RALD Auth
-          </span>
-          <h2 style={{ marginTop: 8, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", fontFamily: "var(--font-display)" }}>
-            {step === "phone" ? HEADER[mode].phone : HEADER[mode].otp}
-          </h2>
-          <p style={{ marginTop: 4, fontSize: 13, color: "oklch(0.62 0.022 55)" }}>
-            {step === "phone"
-              ? "Enter your phone number for a secure one-time code"
-              : `Code sent to ${cleanPhone()} — check your SMS`}
-          </p>
+        {/* RALD AUTH badge */}
+        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-current px-2.5 py-0.5 text-[10px] font-bold tracking-widest"
+          style={{ color: "oklch(0.78 0.20 65)", borderColor: "oklch(0.78 0.20 65 / 0.5)" }}>
+          <Shield size={10} />
+          RALD AUTH
         </div>
+
+        <h2 className="mb-1 text-xl font-bold text-foreground">{modeLabel[mode]}</h2>
+        <p className="mb-5 text-sm text-muted-foreground">{modeSubtitle[mode]}</p>
 
         <AnimatePresence mode="wait">
           {step === "phone" ? (
             <motion.form
-              key="phone"
-              initial={{ opacity: 0, x: -14 }}
+              key="phone-form"
+              initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 14 }}
-              transition={{ duration: 0.22 }}
-              onSubmit={sendOtp}
-              style={{ display: "flex", flexDirection: "column", gap: 14 }}
+              exit={{ opacity: 0, x: 12 }}
+              transition={{ duration: 0.25 }}
+              onSubmit={handleSendCode}
+              className="flex flex-col gap-3"
             >
-              <label style={{ display: "flex", alignItems: "center", gap: 12, borderRadius: "1rem", padding: "14px 16px", background: "oklch(1 0 0 / 5%)", border: "1px solid oklch(1 0 0 / 11%)", cursor: "text" }}>
-                <Phone size={17} style={{ color: "oklch(0.62 0.022 55)", flexShrink: 0 }} />
+              <label
+                className="flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all"
+                style={{ background: "oklch(1 0 0 / 7%)", border: "1px solid oklch(1 0 0 / 10%)" }}
+                onClick={() => { if (boxState === "idle" && !phone) setBoxState("typing"); }}
+              >
+                <Phone size={17} className="shrink-0 text-muted-foreground" />
                 <input
                   ref={phoneRef}
                   type="tel"
@@ -298,129 +261,106 @@ export default function LoginPage() {
                   autoComplete="tel"
                   placeholder="+234 800 000 0000"
                   value={phone}
-                  onChange={(e) => { setPhone(e.target.value); setBoxState("typing"); }}
-                  onFocus={() => { if (boxState === "idle") setBoxState("typing"); }}
-                  onBlur={() => { if (!phone.trim()) setBoxState("idle"); }}
-                  style={{ flex: 1, minWidth: 0, background: "transparent", fontSize: 16, outline: "none", color: "inherit" }}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    setBoxState(e.target.value.length > 0 ? "typing" : "idle");
+                  }}
+                  onFocus={() => setBoxState(phone.length > 0 ? "typing" : "typing")}
+                  onBlur={() => { if (boxState === "typing") setBoxState("idle"); }}
+                  className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground/50 outline-none min-w-0"
                 />
               </label>
 
               <button
                 type="submit"
-                disabled={loading || !phone.trim()}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  borderRadius: "1rem", padding: "14px 0", fontSize: 15, fontWeight: 800,
-                  background: "var(--gradient-primary)", boxShadow: "var(--shadow-glow)",
-                  color: "oklch(0.09 0.01 45)", opacity: (loading || !phone.trim()) ? 0.55 : 1,
-                  transition: "opacity 0.2s",
-                  cursor: (loading || !phone.trim()) ? "not-allowed" : "pointer",
-                }}
-                className="group"
+                disabled={loading}
+                className="mt-1 flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold transition-all"
+                style={
+                  loading
+                    ? { background: "var(--gradient-primary)", animation: "heartbeat 0.85s ease-in-out infinite", color: "oklch(0.07 0.01 140)", boxShadow: "none" }
+                    : { background: "var(--gradient-primary)", color: "oklch(0.07 0.01 140)", boxShadow: "var(--shadow-glow)" }
+                }
               >
                 {loading ? "Sending…" : "Send code"}
-                {!loading && <ArrowRight size={17} style={{ transition: "transform 0.2s" }} />}
+                {!loading && <ArrowRight size={15} />}
               </button>
+
+              <p className="mt-2 text-center text-[11px] leading-relaxed text-muted-foreground/70">
+                Continuing means you accept Loop's Terms &amp; Privacy Policy.
+              </p>
             </motion.form>
           ) : (
             <motion.form
-              key="otp"
-              initial={{ opacity: 0, x: 14 }}
+              key="otp-form"
+              initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -14 }}
-              transition={{ duration: 0.22 }}
-              onSubmit={verifyOtp}
-              style={{ display: "flex", flexDirection: "column", gap: 14 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={{ duration: 0.25 }}
+              onSubmit={handleVerifyOtp}
+              className="flex flex-col gap-3"
             >
-              <label style={{ display: "flex", alignItems: "center", gap: 12, borderRadius: "1rem", padding: "14px 16px", background: "oklch(1 0 0 / 5%)", border: "1px solid oklch(1 0 0 / 11%)", cursor: "text" }}>
-                <Shield size={17} style={{ color: "oklch(0.62 0.022 55)", flexShrink: 0 }} />
+              <p className="text-xs text-muted-foreground">
+                Code sent to <span className="font-medium text-foreground">{cleanPhone()}</span>
+              </p>
+
+              <label
+                className="flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all"
+                style={{ background: "oklch(1 0 0 / 7%)", border: "1px solid oklch(1 0 0 / 10%)" }}
+              >
+                <Shield size={17} className="shrink-0 text-muted-foreground" />
                 <input
                   ref={otpRef}
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  maxLength={8}
-                  placeholder="· · · · · ·"
+                  maxLength={6}
+                  placeholder="• • • • • •"
                   value={otp}
                   onChange={(e) => {
                     const v = e.target.value.replace(/\D/g, "");
                     setOtp(v);
-                    if (boxState === "error") setBoxState("typing");
-                    else setBoxState("typing");
+                    setBoxState(v.length > 0 ? "typing" : "idle");
                   }}
-                  style={{ flex: 1, minWidth: 0, background: "transparent", fontSize: 20, letterSpacing: "0.5em", fontFamily: "monospace", outline: "none", color: "inherit" }}
+                  onFocus={() => setBoxState("typing")}
+                  onBlur={() => { if (boxState === "typing") setBoxState("idle"); }}
+                  className="flex-1 bg-transparent text-xl tracking-[0.55em] text-foreground placeholder:text-muted-foreground/40 outline-none min-w-0"
                 />
               </label>
 
-              <AnimatePresence>
-                {failCount >= 3 && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    style={{ overflow: "hidden" }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: "0.875rem", padding: "12px 14px", background: "oklch(0.62 0.22 25 / 0.10)", border: "1px solid oklch(0.62 0.22 25 / 0.28)" }}>
-                      <div>
-                        <p style={{ fontSize: 13, fontWeight: 600 }}>Wrong code too many times?</p>
-                        <p style={{ fontSize: 11, color: "oklch(0.62 0.022 55)", marginTop: 2 }}>We can send you a new one</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={resendCode}
-                        disabled={loading}
-                        style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 999, padding: "7px 12px", background: "var(--gradient-primary)", color: "oklch(0.09 0.01 45)", fontSize: 12, fontWeight: 800, flexShrink: 0, minHeight: 36 }}
-                      >
-                        <RefreshCw size={12} />
-                        New code
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
               <button
                 type="submit"
-                disabled={loading || otp.length < 4}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  borderRadius: "1rem", padding: "14px 0", fontSize: 15, fontWeight: 800,
-                  background: "var(--gradient-primary)", boxShadow: "var(--shadow-glow)",
-                  color: "oklch(0.09 0.01 45)", opacity: (loading || otp.length < 4) ? 0.55 : 1,
-                  transition: "opacity 0.2s",
-                  cursor: (loading || otp.length < 4) ? "not-allowed" : "pointer",
-                }}
+                disabled={loading}
+                className="flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold transition-all"
+                style={
+                  loading
+                    ? { background: "var(--gradient-primary)", animation: "heartbeat 0.85s ease-in-out infinite", color: "oklch(0.07 0.01 140)" }
+                    : { background: "var(--gradient-primary)", color: "oklch(0.07 0.01 140)", boxShadow: "var(--shadow-glow)" }
+                }
               >
-                {loading ? "Verifying…" : "Verify & enter Loop"}
-                {!loading && <ArrowRight size={17} />}
+                {loading ? "Verifying…" : mode === "join" ? "Create account" : mode === "reset" ? "Reset access" : "Continue"}
+                {!loading && <ArrowRight size={15} />}
               </button>
 
-              <button
-                type="button"
-                onClick={() => { setStep("phone"); setBoxState("typing"); setOtp(""); setFailCount(0); }}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontSize: 13, color: "oklch(0.60 0.022 55)", cursor: "pointer", minHeight: 36, background: "transparent", border: "none" }}
-              >
-                <ChevronLeft size={14} /> Use a different number
-              </button>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => { setStep("phone"); setOtp(""); setBoxState("idle"); }}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronLeft size={13} /> Different number
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendCode({ preventDefault: () => {} } as React.FormEvent)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <RefreshCw size={11} /> Resend
+                </button>
+              </div>
             </motion.form>
           )}
         </AnimatePresence>
-
-        <p style={{ marginTop: 28, textAlign: "center", fontSize: 10, lineHeight: 1.7, color: "oklch(0.55 0.015 55)" }}>
-          Continuing means you accept Loop's Terms &amp; Privacy Policy.
-        </p>
       </motion.div>
-
-      {/* RALD badge */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.55 }}
-        style={{ marginTop: 18, display: "flex", alignItems: "center", gap: 7, fontSize: 11, color: "oklch(0.55 0.015 55)" }}
-      >
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "oklch(0.72 0.20 145)", animation: "breathe 4.5s ease-in-out infinite" }} />
-        Protected by RALD Auth · Powered by TERMII
-      </motion.p>
     </div>
   );
 }

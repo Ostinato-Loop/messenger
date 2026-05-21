@@ -1,32 +1,27 @@
 {
-    "$schema": "node_modules/wrangler/config-schema.json",
-    "name": "messenger",
-    "compatibility_date": "2025-09-24",
-    "compatibility_flags": ["nodejs_compat"],
-    "main": "src/server.ts",
-    "assets": {
-      "directory": "./dist/client",
-      "binding": "ASSETS"
-    },
-    "observability": {
-      "enabled": true
-    },
-    // Daily cron: cleans expired OTP rows from rald_phone_otps (02:00 UTC)
-    "triggers": {
-      "crons": ["0 2 * * *"]
-    },
-    // Environment variables (non-secret, safe to commit)
-    "vars": {
-      "TERMII_BASE_URL": "https://v3.api.termii.com",
-      "TERMII_SENDER_ID": "Ostloop",
-      "TERMII_CHANNEL": "generic",
-      "SUPABASE_URL": "https://onxdcikfttdmnhofsuwo.supabase.co"
-    }
-    // Secrets (set via: wrangler secret put <NAME>)
-    //   TERMII_API_KEY
-    //   SUPABASE_SERVICE_ROLE_KEY
-    //   SUPABASE_PUBLISHABLE_KEY
-    //   TENCENT_SDKAPPID
-    //   TENCENT_SECRETKEY
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "loop-messenger",
+  "compatibility_date": "2025-09-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/server.ts",
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": ["0 2 * * *"]
+  },
+  "vars": {
+    "TERMII_BASE_URL": "https://v3.api.termii.com",
+    "TERMII_SENDER_ID": "Ostloop",
+    "TERMII_CHANNEL": "generic",
+    "SUPABASE_URL": "https://onxdcikfttdmnhofsuwo.supabase.co"
   }
-  
+  // Secrets — set via: wrangler secret put <NAME>
+  //   TERMII_API_KEY              = TLMoWyKobGp...
+  //   SUPABASE_SERVICE_ROLE_KEY   = sb_secret_KdG...
+  //   SUPABASE_PUBLISHABLE_KEY    = sb_secret_KdG...
+}
