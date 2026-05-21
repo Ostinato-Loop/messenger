@@ -32,10 +32,6 @@ jobs:
       - name: Build
         run: bun run build
         env:
-          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          # RALD Auth routes live inside the Worker — no external API URL needed
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          TERMII_BASE_URL: https://v3.api.termii.com
-          TERMII_SENDER_ID: Ostloop
-          TERMII_CHANNEL: generic
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
