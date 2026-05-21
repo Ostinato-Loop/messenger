@@ -35,7 +35,7 @@ function PageLoader() {
 }
 
 function RootRedirect() {
-  const { data: user, isLoading } = useGetMe({ query: { retry: false } });
+  const { data: user, isLoading } = useGetMe({ query: { retry: false } as any });
   const [, setLocation] = useLocation();
 
   React.useEffect(() => {

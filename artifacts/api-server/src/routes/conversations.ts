@@ -257,7 +257,7 @@ router.get("/:conversationId", async (req: Request, res: Response) => {
   const userId = (req.session as any).userId;
   if (!userId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const convId = parseInt(req.params.conversationId);
+  const convId = parseInt(String(req.params.conversationId));
   if (isNaN(convId)) return void res.status(400).json({ error: "Invalid ID" });
 
   const isMember = await db
@@ -287,7 +287,7 @@ router.patch("/:conversationId", async (req: Request, res: Response) => {
   const userId = (req.session as any).userId;
   if (!userId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const convId = parseInt(req.params.conversationId);
+  const convId = parseInt(String(req.params.conversationId));
   if (isNaN(convId)) return void res.status(400).json({ error: "Invalid ID" });
 
   const { name, avatar } = req.body;
@@ -314,7 +314,7 @@ router.post("/:conversationId/read", async (req: Request, res: Response) => {
   const userId = (req.session as any).userId;
   if (!userId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const convId = parseInt(req.params.conversationId);
+  const convId = parseInt(String(req.params.conversationId));
   if (isNaN(convId)) return void res.status(400).json({ error: "Invalid ID" });
 
   await db

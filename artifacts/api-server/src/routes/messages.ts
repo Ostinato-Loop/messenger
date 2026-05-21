@@ -96,7 +96,7 @@ router.get("/conversations/:conversationId/messages", async (req: Request, res: 
   const userId = (req.session as any).userId;
   if (!userId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const convId = parseInt(req.params.conversationId);
+  const convId = parseInt(String(req.params.conversationId));
   if (isNaN(convId)) return void res.status(400).json({ error: "Invalid ID" });
 
   const isMember = await db
@@ -127,7 +127,7 @@ router.post("/conversations/:conversationId/messages", async (req: Request, res:
   const userId = (req.session as any).userId;
   if (!userId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const convId = parseInt(req.params.conversationId);
+  const convId = parseInt(String(req.params.conversationId));
   if (isNaN(convId)) return void res.status(400).json({ error: "Invalid ID" });
 
   const isMember = await db
@@ -171,7 +171,7 @@ router.patch("/messages/:messageId", async (req: Request, res: Response) => {
   const userId = (req.session as any).userId;
   if (!userId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const msgId = parseInt(req.params.messageId);
+  const msgId = parseInt(String(req.params.messageId));
   if (isNaN(msgId)) return void res.status(400).json({ error: "Invalid ID" });
 
   const msg = await db
@@ -197,7 +197,7 @@ router.delete("/messages/:messageId", async (req: Request, res: Response) => {
   const userId = (req.session as any).userId;
   if (!userId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const msgId = parseInt(req.params.messageId);
+  const msgId = parseInt(String(req.params.messageId));
   if (isNaN(msgId)) return void res.status(400).json({ error: "Invalid ID" });
 
   const msg = await db
@@ -221,7 +221,7 @@ router.post("/messages/:messageId/reactions", async (req: Request, res: Response
   const userId = (req.session as any).userId;
   if (!userId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const msgId = parseInt(req.params.messageId);
+  const msgId = parseInt(String(req.params.messageId));
   if (isNaN(msgId)) return void res.status(400).json({ error: "Invalid ID" });
 
   const { emoji } = req.body;
@@ -272,7 +272,7 @@ router.delete("/messages/:messageId/reactions/:emoji", async (req: Request, res:
   const userId = (req.session as any).userId;
   if (!userId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const msgId = parseInt(req.params.messageId);
+  const msgId = parseInt(String(req.params.messageId));
   if (isNaN(msgId)) return void res.status(400).json({ error: "Invalid ID" });
 
   await db
@@ -281,7 +281,7 @@ router.delete("/messages/:messageId/reactions/:emoji", async (req: Request, res:
       and(
         eq(messageReactionsTable.messageId, msgId),
         eq(messageReactionsTable.userId, userId),
-        eq(messageReactionsTable.emoji, req.params.emoji)
+        eq(messageReactionsTable.emoji, String(req.params.emoji))
       )
     );
 

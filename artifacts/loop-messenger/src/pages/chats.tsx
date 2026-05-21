@@ -28,7 +28,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Send, Plus, Search, MessageSquare, Phone, MoreVertical, X, Check, Edit2, Trash2 } from "lucide-react";
-import { format, isToday, isYesterday, formatDistanceToNow } from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
 import loopLogo from "@assets/IMG_3832_1779368920403.jpeg";
 
 const formatMessageTime = (dateStr: string) => {
@@ -52,13 +52,13 @@ export default function ChatsPage() {
   const queryClient = useQueryClient();
   
   const { data: me } = useGetMe();
-  const { data: conversations, isLoading: isLoadingConvs } = useListConversations({ query: { refetchInterval: 5000 } });
-  const { data: stats } = useGetConversationStats({ query: { refetchInterval: 5000 } });
+  const { data: conversations, isLoading: isLoadingConvs } = useListConversations({ query: { refetchInterval: 5000 } as any });
+  const { data: stats } = useGetConversationStats({ query: { refetchInterval: 5000 } as any });
   
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const debouncedSearch = useDebounce(searchQuery, 300);
-  const { data: searchResults, isLoading: isSearching } = useSearchUsers({ q: debouncedSearch }, { query: { enabled: debouncedSearch.length > 1 } });
+  const { data: searchResults, isLoading: isSearching } = useSearchUsers({ q: debouncedSearch }, { query: { enabled: debouncedSearch.length > 1 } as any });
   
   const createConversation = useCreateConversation();
 
@@ -225,7 +225,7 @@ function ActiveChat({ conversationId, me }: { conversationId: number, me: any })
   const scrollRef = useRef<HTMLDivElement>(null);
   
   const { data: conv } = useGetConversation(conversationId);
-  const { data: messages, isLoading } = useListMessages(conversationId, { query: { refetchInterval: 3000 } });
+  const { data: messages, isLoading } = useListMessages(conversationId, { query: { refetchInterval: 3000 } as any });
   
   const sendMessage = useSendMessage();
   const markRead = useMarkConversationRead();
@@ -259,7 +259,7 @@ function ActiveChat({ conversationId, me }: { conversationId: number, me: any })
         }
       });
     } else {
-      sendMessage.mutate({ data: { type: "text", content: inputText, conversationId } }, {
+      sendMessage.mutate({ conversationId, data: { type: "text", content: inputText } }, {
         onSuccess: () => {
           setInputText("");
           queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId) });

@@ -45,7 +45,7 @@ router.get("/:userId", async (req: Request, res: Response) => {
   const sessionUserId = (req.session as any).userId;
   if (!sessionUserId) return void res.status(401).json({ error: "Unauthorized" });
 
-  const id = parseInt(req.params.userId);
+  const id = parseInt(String(req.params.userId));
   if (isNaN(id)) return void res.status(400).json({ error: "Invalid user ID" });
 
   const users = await db

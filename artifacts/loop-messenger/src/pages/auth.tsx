@@ -54,6 +54,7 @@ export default function AuthPage() {
       const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
       return () => clearTimeout(t);
     }
+    return undefined;
   }, [cooldown]);
 
   // Watch phone input → amber when typing
