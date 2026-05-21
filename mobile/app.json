@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Loop Messenger",
+    "slug": "loop-messenger-ma",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "loop",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#110D07",
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#110D07"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.ostinatoloop.messenger"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#110D07"
+      },
+      "package": "com.ostinatoloop.messenger"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        { "photosPermission": "Loop Messenger accesses your photos to share images." }
+      ],
+      [
+        "expo-document-picker",
+        { "iCloudContainerEnvironment": "Production" }
+      ],
+      [
+        "expo-av",
+        { "microphonePermission": "Loop Messenger uses the microphone for voice messages and calls." }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
