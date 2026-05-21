@@ -62,7 +62,7 @@ jobs:
           BASE_PATH: /
           PORT: "3000"
           NODE_ENV: production
-          VITE_API_URL: "https://loop-messenger-api.d5a1cd03b76f467430034af64a7062fd.workers.dev"
+          VITE_API_URL: ${{ vars.VITE_API_URL || '' }}
         run: pnpm --filter @workspace/loop-messenger run build
 
       - name: Upload frontend artifact
