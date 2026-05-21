@@ -1,22 +1,31 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Loop Messenger API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication (OTP)
+  - name: users
+    description: User profiles
+  - name: conversations
+    description: Conversations and groups
+  - name: messages
+    description: Messages
+  - name: reactions
+    description: Message reactions
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +33,659 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── AUTH ──────────────────────────────────────────────────────────────────
+  /auth/send-otp:
+    post:
+      operationId: sendOtp
+      tags: [auth]
+      summary: Send OTP to a phone number via TERMII
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendOtpInput"
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendOtpResult"
+        "429":
+          description: Rate limited
+
+  /auth/verify-otp:
+    post:
+      operationId: verifyOtp
+      tags: [auth]
+      summary: Verify OTP and create session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpInput"
+      responses:
+        "200":
+          description: Verified, session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          description: Invalid or expired OTP
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Destroy session
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+
+  /auth/profile:
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update the current user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # ── USERS ──────────────────────────────────────────────────────────────────
+  /users/search:
+    get:
+      operationId: searchUsers
+      tags: [users]
+      summary: Search users by display name or phone
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /users/{userId}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+
+  # ── CONVERSATIONS ──────────────────────────────────────────────────────────
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List all conversations for the current user
+      responses:
+        "200":
+          description: Conversation list with last message and unread count
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationSummary"
+
+    post:
+      operationId: createConversation
+      tags: [conversations]
+      summary: Create a new direct or group conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/stats:
+    get:
+      operationId: getConversationStats
+      tags: [conversations]
+      summary: Get unread counts and message totals for the current user
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationStats"
+
+  /conversations/{conversationId}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get a single conversation with members
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationDetail"
+        "404":
+          description: Not found
+
+    patch:
+      operationId: updateConversation
+      tags: [conversations]
+      summary: Update group name or avatar
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationUpdate"
+      responses:
+        "200":
+          description: Updated conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/{conversationId}/read:
+    post:
+      operationId: markConversationRead
+      tags: [conversations]
+      summary: Mark all messages in a conversation as read
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+
+  # ── MESSAGES ───────────────────────────────────────────────────────────────
+  /conversations/{conversationId}/messages:
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: List recent messages in a conversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+    post:
+      operationId: sendMessage
+      tags: [messages]
+      summary: Send a message to a conversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageInput"
+      responses:
+        "201":
+          description: Sent message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+  /messages/{messageId}:
+    patch:
+      operationId: editMessage
+      tags: [messages]
+      summary: Edit a message's text content
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageUpdate"
+      responses:
+        "200":
+          description: Updated message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+    delete:
+      operationId: deleteMessage
+      tags: [messages]
+      summary: Delete a message (soft delete)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+
+  # ── REACTIONS ──────────────────────────────────────────────────────────────
+  /messages/{messageId}/reactions:
+    post:
+      operationId: addReaction
+      tags: [reactions]
+      summary: Add an emoji reaction to a message
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReactionInput"
+      responses:
+        "201":
+          description: Reaction added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reaction"
+
+  /messages/{messageId}/reactions/{emoji}:
+    delete:
+      operationId: removeReaction
+      tags: [reactions]
+      summary: Remove a reaction
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: emoji
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    OkResult:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    # ── AUTH ────────────────────────────────────────────────────────────────
+    SendOtpInput:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          description: Phone number in international format e.g. +2348012345678
+
+    SendOtpResult:
+      type: object
+      required: [message, cooldownSeconds]
+      properties:
+        message:
+          type: string
+        cooldownSeconds:
+          type: integer
+
+    VerifyOtpInput:
+      type: object
+      required: [phone, code]
+      properties:
+        phone:
+          type: string
+        code:
+          type: string
+
+    AuthSession:
+      type: object
+      required: [user, isNewUser]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        isNewUser:
+          type: boolean
+
+    ProfileUpdate:
+      type: object
+      properties:
+        displayName:
+          type: string
+        bio:
+          type: ["string", "null"]
+        avatar:
+          type: ["string", "null"]
+
+    # ── USERS ────────────────────────────────────────────────────────────────
+    User:
+      type: object
+      required: [id, phone, displayName, createdAt]
+      properties:
+        id:
+          type: integer
+        phone:
+          type: string
+        displayName:
+          type: string
+        bio:
+          type: ["string", "null"]
+        avatar:
+          type: ["string", "null"]
+        isOnline:
+          type: boolean
+        lastSeen:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    # ── CONVERSATIONS ─────────────────────────────────────────────────────────
+    Conversation:
+      type: object
+      required: [id, type, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [direct, group]
+        name:
+          type: ["string", "null"]
+        avatar:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ConversationSummary:
+      type: object
+      required: [id, type, createdAt, unreadCount, members]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [direct, group]
+        name:
+          type: ["string", "null"]
+        avatar:
+          type: ["string", "null"]
+        unreadCount:
+          type: integer
+        lastMessage:
+          $ref: "#/components/schemas/Message"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationMember"
+        createdAt:
+          type: string
+
+    ConversationDetail:
+      type: object
+      required: [id, type, createdAt, members]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [direct, group]
+        name:
+          type: ["string", "null"]
+        avatar:
+          type: ["string", "null"]
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationMember"
+        createdAt:
+          type: string
+
+    ConversationMember:
+      type: object
+      required: [userId, role, joinedAt, user]
+      properties:
+        userId:
+          type: integer
+        role:
+          type: string
+          enum: [admin, member]
+        joinedAt:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    ConversationStats:
+      type: object
+      required: [totalConversations, totalUnread, directCount, groupCount]
+      properties:
+        totalConversations:
+          type: integer
+        totalUnread:
+          type: integer
+        directCount:
+          type: integer
+        groupCount:
+          type: integer
+
+    ConversationInput:
+      type: object
+      required: [type, memberIds]
+      properties:
+        type:
+          type: string
+          enum: [direct, group]
+        name:
+          type: ["string", "null"]
+        memberIds:
+          type: array
+          items:
+            type: integer
+
+    ConversationUpdate:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        avatar:
+          type: ["string", "null"]
+
+    # ── MESSAGES ────────────────────────────────────────────────────────────
+    Message:
+      type: object
+      required: [id, conversationId, senderId, type, createdAt]
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        senderId:
+          type: integer
+        type:
+          type: string
+          enum: [text, image, audio, file, system]
+        content:
+          type: ["string", "null"]
+        mediaUrl:
+          type: ["string", "null"]
+        replyToId:
+          type: ["integer", "null"]
+        isDeleted:
+          type: boolean
+        editedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        sender:
+          $ref: "#/components/schemas/User"
+        reactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reaction"
+        replyTo:
+          $ref: "#/components/schemas/Message"
+
+    MessageInput:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [text, image, audio, file]
+        content:
+          type: ["string", "null"]
+        mediaUrl:
+          type: ["string", "null"]
+        replyToId:
+          type: ["integer", "null"]
+
+    MessageUpdate:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+
+    # ── REACTIONS ────────────────────────────────────────────────────────────
+    ReactionInput:
+      type: object
+      required: [emoji]
+      properties:
+        emoji:
+          type: string
+
+    Reaction:
+      type: object
+      required: [messageId, userId, emoji, createdAt]
+      properties:
+        messageId:
+          type: integer
+        userId:
+          type: integer
+        emoji:
+          type: string
+        createdAt:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
