@@ -5,8 +5,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetMe } from "@workspace/api-client-react";
 import { SplashScreen } from "@/components/splash";
+import { CallProvider } from "@/lib/call-provider";
+import { InCallView } from "@/components/in-call-view";
+import { IncomingCallModal } from "@/components/incoming-call-modal";
+import { OfflineBanner } from "@/components/skeleton-loaders";
+import { useIsOffline } from "@/lib/network";
 
-// Lazy-loaded pages for African 3G/4G optimization
+// Lazy-loaded pages — code split for 3G/4G optimization
 const AuthPage        = lazy(() => import("@/pages/auth"));
 const OnboardingPage  = lazy(() => import("@/pages/onboarding"));
 const ChatsPage       = lazy(() => import("@/pages/chats"));
@@ -47,7 +52,7 @@ function RootRedirect() {
   return <PageLoader />;
 }
 
-function Router() {
+function AppRoutes() {
   return (
     <div className="dark min-h-screen bg-background text-foreground selection:bg-primary/30">
       <Suspense fallback={<PageLoader />}>
@@ -67,19 +72,41 @@ function Router() {
   );
 }
 
+/** Inner app — has access to QueryClient, so can call useGetMe for CallProvider */
+function AuthenticatedShell({ splashDone, onSplashDone }: { splashDone: boolean; onSplashDone: () => void }) {
+  const { data: me } = useGetMe({ query: { retry: false, staleTime: 60_000 } as any });
+  const isOffline = useIsOffline();
+
+  return (
+    <CallProvider me={me as any}>
+      {isOffline && <OfflineBanner />}
+      <IncomingCallModal />
+      <InCallView />
+      {!splashDone && <SplashScreen onDone={onSplashDone} />}
+      <AppRoutes />
+    </CallProvider>
+  );
+}
+
 function App() {
   const [splashDone, setSplashDone] = useState(false);
 
   React.useEffect(() => {
     document.documentElement.classList.add("dark");
+
+    // Register service worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/sw.js", { scope: "/" })
+        .catch(() => { /* SW registration is best-effort */ });
+    }
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
-          <Router />
+          <AuthenticatedShell splashDone={splashDone} onSplashDone={() => setSplashDone(true)} />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

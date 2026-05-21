@@ -1,7 +1,7 @@
-// Loop Messenger — Service Worker
-// Strategy: cache-first for static assets, network-first for API
+// Loop Messenger — Production Service Worker v2
+// Strategy: cache-first static, network-first API with 4s timeout for 3G/2G resilience
 
-const CACHE_VERSION = "loop-v1";
+const CACHE_VERSION = "loop-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 

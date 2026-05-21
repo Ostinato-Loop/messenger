@@ -34,6 +34,9 @@ import { format, isToday, isYesterday } from "date-fns";
 import loopLogo from "@assets/IMG_3832_1779368920403.jpeg";
 import { VoiceNoteRecorder, AudioMessage } from "@/components/voice-note-recorder";
 import { formatDuration } from "@/lib/trtc-client";
+import { useNetworkQuality } from "@/lib/network";
+import { SkeletonMessageList, SkeletonConversationList, NetworkBadge } from "@/components/skeleton-loaders";
+import { useCall } from "@/lib/call-provider";
 
 const formatMessageTime = (dateStr: string) => format(new Date(dateStr), "HH:mm");
 
@@ -53,8 +56,13 @@ export default function ChatsPage() {
   const queryClient = useQueryClient();
 
   const { data: me } = useGetMe();
-  const { data: conversations, isLoading: isLoadingConvs } = useListConversations({ query: { refetchInterval: 4000 } as any });
-  const { data: stats } = useGetConversationStats({ query: { refetchInterval: 4000 } as any });
+  const network = useNetworkQuality();
+  const { data: conversations, isLoading: isLoadingConvs } = useListConversations({
+    query: { refetchInterval: network.pollInterval > 0 ? network.pollInterval : false } as any,
+  });
+  const { data: stats } = useGetConversationStats({
+    query: { refetchInterval: network.pollInterval > 0 ? network.pollInterval : false } as any,
+  });
 
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
 
@@ -434,8 +442,10 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: conv } = useGetConversation(conversationId);
+  const network = useNetworkQuality();
+  const { startCall } = useCall();
   const { data: messages, isLoading } = useListMessages(conversationId, {
-    query: { refetchInterval: 3000 } as any,
+    query: { refetchInterval: network.pollInterval > 0 ? network.pollInterval : false } as any,
   });
 
   const sendMessage = useSendMessage();
@@ -463,26 +473,30 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
     if (!inputText.trim()) return;
 
     if (editingId) {
+      const text = inputText;
+      setInputText("");
       editMessage.mutate(
-        { messageId: editingId, data: { content: inputText } },
+        { messageId: editingId, data: { content: text } },
         {
           onSuccess: () => {
             setEditingId(null);
-            setInputText("");
             queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId) });
           },
+          onError: () => setInputText(text),
         }
       );
     } else {
+      const text = inputText;
+      setInputText(""); // Optimistic clear — feels instant on 3G
       sendMessage.mutate(
-        { conversationId, data: { type: "text", content: inputText } },
+        { conversationId, data: { type: "text", content: text } },
         {
           onSuccess: () => {
-            setInputText("");
             queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId) });
             queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetConversationStatsQueryKey() });
           },
+          onError: () => setInputText(text), // restore on failure
         }
       );
     }
@@ -553,17 +567,30 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
             ) : null}
           </div>
         </div>
-        <Button variant="ghost" size="icon">
-          <Phone className="w-5 h-5" />
-        </Button>
+        {!isGroup && otherMember && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() =>
+              startCall({
+                conversationId,
+                respondentId: otherMember.id,
+                peerName: otherMember.displayName,
+                peerAvatar: otherMember.avatar ?? undefined,
+                type: "voice",
+              })
+            }
+            title="Start voice call"
+          >
+            <Phone className="w-5 h-5" />
+          </Button>
+        )}
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3" ref={scrollRef}>
         {isLoading ? (
-          <div className="flex justify-center p-4">
-            <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          </div>
+          <SkeletonMessageList />
         ) : (
           messages?.map((msg, index) => {
             const isMe = msg.senderId === me?.id;
