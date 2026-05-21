@@ -1,5 +1,5 @@
 import { motion, useMotionValue, useTransform } from "framer-motion";
-import { Check, CheckCheck, CornerUpLeft, Smile } from "lucide-react";
+import { Check, CheckCheck, CornerUpLeft, Download, FileText, Smile } from "lucide-react";
 import { useState } from "react";
 
 import type { Message } from "@/hooks/useMessaging";
@@ -27,13 +27,12 @@ export function MessageBubble({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const reactions = message.reactions ?? [];
-  // group reactions by emoji
   const grouped = reactions.reduce<Record<string, string[]>>((acc, r) => {
     (acc[r.emoji] ??= []).push(r.user_id);
     return acc;
   }, {});
-
   const isRead = (message.reads?.length ?? 0) > 0;
+  const isDeleted = !!message.deleted_at;
 
   return (
     <div className={`group relative flex w-full items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}>
@@ -55,12 +54,12 @@ export function MessageBubble({
         }}
         className="relative max-w-[78%]"
       >
-        {/* reply preview */}
+        {/* Reply preview */}
         {replyToMessage && (
           <div className={`mb-1 rounded-xl px-3 py-1.5 text-xs ${isMine ? "ml-auto" : ""} glass border-l-2 border-primary/60 max-w-full`}>
             <p className="truncate text-muted-foreground">
               <span className="text-primary/90">↳ </span>
-              {replyToMessage.content || "Message"}
+              {replyToMessage.content || "Attachment"}
             </p>
           </div>
         )}
@@ -70,7 +69,7 @@ export function MessageBubble({
           initial={{ opacity: 0, y: 6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          onDoubleClick={() => onReact(message.id, "❤️", reactions)}
+          onDoubleClick={() => !isDeleted && onReact(message.id, "❤️", reactions)}
           className={[
             "relative rounded-2xl px-3.5 py-2 text-[15px] leading-snug",
             isMine
@@ -78,15 +77,64 @@ export function MessageBubble({
               : "rounded-bl-md text-foreground glass",
             message.pending ? "opacity-70" : "",
             message.failed ? "ring-1 ring-destructive/60" : "",
+            isDeleted ? "opacity-50 italic" : "",
           ].join(" ")}
-          style={isMine ? { background: "var(--gradient-purple)", boxShadow: "0 4px 24px -8px oklch(0.66 0.22 295 / 0.6)" } : undefined}
+          style={isMine && !isDeleted
+            ? { background: "var(--gradient-purple)", boxShadow: "0 4px 24px -8px oklch(0.66 0.22 295 / 0.6)" }
+            : undefined}
         >
           {!isMine && showAvatar && senderName && (
             <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-primary/80">
               {senderName}
             </p>
           )}
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+
+          {/* Content by type */}
+          {isDeleted ? (
+            <p className="text-sm">Message deleted</p>
+          ) : message.type === "image" && message.media_url ? (
+            <a href={message.media_url} target="_blank" rel="noopener noreferrer">
+              <img
+                src={message.media_url}
+                alt="image"
+                className="max-w-[220px] rounded-xl object-cover"
+                loading="lazy"
+              />
+              {message.content && (
+                <p className="mt-2 whitespace-pre-wrap break-words">{message.content}</p>
+              )}
+            </a>
+          ) : message.type === "audio" && message.media_url ? (
+            <div className="flex flex-col gap-1">
+              <audio
+                controls
+                src={message.media_url}
+                className="w-[200px] max-w-full rounded-lg"
+                style={{ height: 36 }}
+              />
+              {message.content && (
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm">{message.content}</p>
+              )}
+            </div>
+          ) : message.type === "file" && message.media_url ? (
+            <a
+              href={message.media_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="flex items-center gap-2 text-sm underline-offset-2 hover:underline"
+            >
+              <FileText size={16} className="shrink-0" />
+              <span className="truncate max-w-[160px]">
+                {message.content || message.media_url.split("/").pop() || "File"}
+              </span>
+              <Download size={14} className="shrink-0 opacity-70" />
+            </a>
+          ) : (
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          )}
+
+          {/* Timestamp + read receipt */}
           <div className={`mt-0.5 flex items-center gap-1 text-[10px] ${isMine ? "text-primary-foreground/80 justify-end" : "text-muted-foreground"}`}>
             <span>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
             {isMine && !message.pending && (
@@ -96,7 +144,7 @@ export function MessageBubble({
             {message.failed && <span className="text-destructive-foreground">failed</span>}
           </div>
 
-          {/* reactions row */}
+          {/* Reactions row */}
           {Object.keys(grouped).length > 0 && (
             <div className={`absolute -bottom-3 ${isMine ? "right-2" : "left-2"} flex gap-1`}>
               {Object.entries(grouped).map(([emoji, users]) => {
@@ -116,7 +164,7 @@ export function MessageBubble({
           )}
         </motion.div>
 
-        {/* quick action bar — hover/long-press surface */}
+        {/* Swipe-to-reply indicator */}
         <motion.div
           style={{ opacity: replyIconOpacity }}
           className="pointer-events-none absolute -left-9 top-1/2 -translate-y-1/2"
@@ -126,21 +174,25 @@ export function MessageBubble({
           </div>
         </motion.div>
 
-        <div className={`pointer-events-none absolute top-0 ${isMine ? "-left-16" : "-right-16"} flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100`}>
-          <button
-            onClick={() => setPickerOpen((v) => !v)}
-            className="rounded-full glass-raised p-1.5 hover:glow-ring"
-          >
-            <Smile size={14} />
-          </button>
-          <button
-            onClick={() => onReply(message)}
-            className="rounded-full glass-raised p-1.5 hover:glow-ring"
-          >
-            <CornerUpLeft size={14} />
-          </button>
-        </div>
+        {/* Hover action bar */}
+        {!isDeleted && (
+          <div className={`pointer-events-none absolute top-0 ${isMine ? "-left-16" : "-right-16"} flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100`}>
+            <button
+              onClick={() => setPickerOpen((v) => !v)}
+              className="rounded-full glass-raised p-1.5 hover:glow-ring"
+            >
+              <Smile size={14} />
+            </button>
+            <button
+              onClick={() => onReply(message)}
+              className="rounded-full glass-raised p-1.5 hover:glow-ring"
+            >
+              <CornerUpLeft size={14} />
+            </button>
+          </div>
+        )}
 
+        {/* Quick reaction picker */}
         {pickerOpen && (
           <motion.div
             initial={{ opacity: 0, y: -4, scale: 0.9 }}
