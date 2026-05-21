@@ -17,6 +17,8 @@ type Mode = "signin" | "join" | "reset";
 type Step = "phone" | "otp";
 type BoxState = "idle" | "typing" | "error" | "success";
 
+const RALD_API = import.meta.env.VITE_RALD_API_URL || "";
+
 const CORNER: Record<BoxState, { border: string; filter: string }> = {
   idle:    { border: "2.5px solid oklch(1 0 0 / 14%)",        filter: "none" },
   typing:  { border: "2.5px solid oklch(0.78 0.20 65)",       filter: "drop-shadow(0 0 6px oklch(0.78 0.20 65 / 0.75))" },
@@ -44,6 +46,17 @@ function Corner({ pos, state }: { pos: "tl" | "tr" | "bl" | "br"; state: BoxStat
     ...(pos === "br" && { bottom: 0, right: 0, borderBottom: c.border, borderRight: c.border, borderRadius: `0 0 1.5rem 0` }),
   };
   return <span aria-hidden="true" style={style} />;
+}
+
+async function raldFetch(path: string, body: Record<string, string>) {
+  const base = RALD_API.replace(/\/$/, "");
+  const res = await fetch(`${base}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json() as Record<string, unknown>;
+  return { ok: res.ok, status: res.status, data };
 }
 
 export default function LoginPage() {
@@ -89,9 +102,14 @@ export default function LoginPage() {
     e.preventDefault();
     if (!phone.trim() || loading) return;
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ phone: cleanPhone() });
+    const { ok, data } = await raldFetch("/api/auth/send-otp", { phone: cleanPhone() });
     setLoading(false);
-    if (error) { setBoxState("error"); shake(); toast.error(error.message); return; }
+    if (!ok) {
+      setBoxState("error");
+      shake();
+      toast.error((data.error as string) || "Failed to send code");
+      return;
+    }
     toast.success("Code sent via RALD Auth ✓");
     setStep("otp");
     setBoxState("typing");
@@ -101,26 +119,51 @@ export default function LoginPage() {
     e.preventDefault();
     if (otp.length < 4 || loading) return;
     setLoading(true);
-    const { error } = await supabase.auth.verifyOtp({ phone: cleanPhone(), token: otp.trim(), type: "sms" });
+    const { ok, data } = await raldFetch("/api/auth/verify-otp", {
+      phone: cleanPhone(),
+      otp: otp.trim(),
+    });
     setLoading(false);
-    if (error) {
+
+    if (!ok) {
       const n = failCount + 1;
       setFailCount(n);
       setBoxState("error");
       shake();
-      toast.error(n >= 3 ? "Too many attempts — request a new code below." : `Wrong code · ${3 - n} attempt${3 - n !== 1 ? "s" : ""} left`);
+      toast.error((data.error as string) || `Wrong code · ${3 - n} attempt${3 - n !== 1 ? "s" : ""} left`);
       return;
     }
+
+    const token = data.token as string | undefined;
+    if (!token) {
+      setBoxState("error");
+      toast.error("Auth error — no token received");
+      return;
+    }
+
     setBoxState("success");
-    toast.success("Welcome to Loop 🌍");
+
+    const { error: vErr } = await supabase.auth.verifyOtp({
+      token_hash: token,
+      type: "magiclink",
+    });
+
+    if (vErr) {
+      console.error("[RALD] session error:", vErr);
+      setBoxState("error");
+      toast.error("Session error — please try again");
+      return;
+    }
+
+    toast.success("Welcome to Loop");
   }
 
   async function resendCode() {
     if (!phone || loading) return;
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ phone: cleanPhone() });
+    const { ok, data } = await raldFetch("/api/auth/resend-otp", { phone: cleanPhone() });
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (!ok) { toast.error((data.error as string) || "Failed to resend"); return; }
     setFailCount(0); setOtp(""); setBoxState("typing");
     toast.success("New code sent");
   }
@@ -191,7 +234,6 @@ export default function LoginPage() {
           transition: "box-shadow 0.35s ease",
         }}
       >
-        {/* Four corners */}
         <Corner pos="tl" state={boxState} />
         <Corner pos="tr" state={boxState} />
         <Corner pos="bl" state={boxState} />
@@ -224,7 +266,7 @@ export default function LoginPage() {
         {/* Header */}
         <div style={{ marginBottom: "1.25rem" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "oklch(0.76 0.18 65 / 0.12)", color: "oklch(0.76 0.18 65)", borderRadius: 999, padding: "2px 10px", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.28em" }}>
-            🔒 RALD Auth
+            RALD Auth
           </span>
           <h2 style={{ marginTop: 8, fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", fontFamily: "var(--font-display)" }}>
             {step === "phone" ? HEADER[mode].phone : HEADER[mode].otp}
@@ -310,7 +352,6 @@ export default function LoginPage() {
                 />
               </label>
 
-              {/* Persistent fail prompt — appears after 3 wrong attempts */}
               <AnimatePresence>
                 {failCount >= 3 && (
                   <motion.div
@@ -366,7 +407,7 @@ export default function LoginPage() {
         </AnimatePresence>
 
         <p style={{ marginTop: 28, textAlign: "center", fontSize: 10, lineHeight: 1.7, color: "oklch(0.55 0.015 55)" }}>
-          Continuing means you accept Loop's Terms & Privacy Policy.
+          Continuing means you accept Loop's Terms &amp; Privacy Policy.
         </p>
       </motion.div>
 
@@ -378,7 +419,7 @@ export default function LoginPage() {
         style={{ marginTop: 18, display: "flex", alignItems: "center", gap: 7, fontSize: 11, color: "oklch(0.55 0.015 55)" }}
       >
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: "oklch(0.72 0.20 145)", animation: "breathe 4.5s ease-in-out infinite" }} />
-        Protected by RALD Auth · End-to-end secured
+        Protected by RALD Auth · Powered by TERMII
       </motion.p>
     </div>
   );
