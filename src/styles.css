@@ -5,7 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Loop Messenger — futuristic neon-purple design system.
+ * Loop Messenger — African-first warm design system.
+ * Primary: Warm amber-gold. Background: deep warm night.
  * All colors in oklch. Use semantic tokens, never raw hex/rgb in components.
  */
 
@@ -49,15 +50,17 @@
   --animate-orbit: orbit 18s linear infinite;
   --animate-rise: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-shake: shake 0.55s ease both;
+  --animate-corner-pulse: cornerPulse 1.8s ease-in-out infinite;
 }
 
 @keyframes breathe {
-  0%, 100% { opacity: 0.55; transform: scale(1); filter: blur(28px); }
-  50%      { opacity: 0.95; transform: scale(1.08); filter: blur(34px); }
+  0%, 100% { opacity: 0.5; transform: scale(1); filter: blur(28px); }
+  50%       { opacity: 0.9; transform: scale(1.07); filter: blur(34px); }
 }
 @keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 0 0 oklch(0.62 0.22 295 / 0.45), 0 0 28px 4px oklch(0.62 0.22 295 / 0.18); }
-  50%      { box-shadow: 0 0 0 12px oklch(0.62 0.22 295 / 0), 0 0 44px 10px oklch(0.62 0.22 295 / 0.35); }
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.76 0.18 65 / 0.4), 0 0 28px 4px oklch(0.76 0.18 65 / 0.15); }
+  50%       { box-shadow: 0 0 0 10px oklch(0.76 0.18 65 / 0), 0 0 44px 10px oklch(0.76 0.18 65 / 0.3); }
 }
 @keyframes orbit {
   to { transform: rotate(360deg); }
@@ -70,53 +73,72 @@
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+@keyframes shake {
+  0%, 100%         { transform: translateX(0); }
+  12.5%, 62.5%     { transform: translateX(-5px); }
+  37.5%, 87.5%     { transform: translateX(5px); }
+}
+@keyframes cornerPulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
 
 :root {
   --radius: 1rem;
 
-  /* Deep near-black with cool violet undertone */
-  --background: oklch(0.14 0.018 285);
-  --foreground: oklch(0.97 0.005 285);
+  /* Deep warm night — African midnight sky */
+  --background: oklch(0.09 0.014 45);
+  --foreground: oklch(0.97 0.008 65);
 
-  --surface: oklch(0.18 0.022 285);
-  --surface-raised: oklch(0.22 0.028 287);
+  --surface: oklch(0.13 0.018 48);
+  --surface-raised: oklch(0.17 0.022 50);
 
-  --card: oklch(0.19 0.025 287);
-  --card-foreground: oklch(0.97 0.005 285);
-  --popover: oklch(0.18 0.025 287);
-  --popover-foreground: oklch(0.97 0.005 285);
+  --card: oklch(0.14 0.020 48);
+  --card-foreground: oklch(0.97 0.008 65);
+  --popover: oklch(0.13 0.020 48);
+  --popover-foreground: oklch(0.97 0.008 65);
 
-  /* Neon purple — restrained, never aggressive */
-  --primary: oklch(0.66 0.22 295);
-  --primary-foreground: oklch(0.99 0.005 285);
-  --primary-glow: oklch(0.72 0.24 300);
+  /* Warm amber-gold — African gold */
+  --primary: oklch(0.76 0.18 65);
+  --primary-foreground: oklch(0.09 0.01 45);
+  --primary-glow: oklch(0.80 0.20 62);
 
-  --secondary: oklch(0.26 0.035 287);
-  --secondary-foreground: oklch(0.97 0.005 285);
+  --secondary: oklch(0.22 0.030 50);
+  --secondary-foreground: oklch(0.97 0.008 65);
 
-  --muted: oklch(0.24 0.025 287);
-  --muted-foreground: oklch(0.68 0.022 285);
+  --muted: oklch(0.21 0.022 50);
+  --muted-foreground: oklch(0.62 0.022 55);
 
-  --accent: oklch(0.32 0.06 295);
-  --accent-foreground: oklch(0.97 0.005 285);
+  --accent: oklch(0.28 0.055 60);
+  --accent-foreground: oklch(0.97 0.008 65);
 
   --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: oklch(0.99 0.005 285);
+  --destructive-foreground: oklch(0.99 0.005 25);
 
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 10%);
-  --ring: oklch(0.66 0.22 295 / 60%);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 11%);
+  --ring: oklch(0.76 0.18 65 / 55%);
 
+  /* Forest green for online/live indicators */
   --live: oklch(0.72 0.2 145);
 
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  --gradient-aurora: radial-gradient(ellipse at 20% 0%, oklch(0.4 0.16 295 / 0.45), transparent 55%),
-                     radial-gradient(ellipse at 80% 100%, oklch(0.32 0.14 270 / 0.35), transparent 60%);
-  --gradient-purple: linear-gradient(135deg, oklch(0.62 0.22 295), oklch(0.7 0.24 305));
-  --shadow-glow: 0 0 40px -8px oklch(0.66 0.22 295 / 0.55);
-  --shadow-glass: 0 8px 32px -8px oklch(0.1 0.02 285 / 0.6);
+  /* Warm aurora — African sunrise/sunset */
+  --gradient-aurora:
+    radial-gradient(ellipse at 15% 0%, oklch(0.50 0.16 65 / 0.30), transparent 52%),
+    radial-gradient(ellipse at 85% 100%, oklch(0.38 0.14 45 / 0.22), transparent 58%),
+    radial-gradient(ellipse at 50% 50%, oklch(0.28 0.08 55 / 0.15), transparent 70%);
+
+  /* Primary gradient — warm amber to golden orange */
+  --gradient-primary: linear-gradient(135deg, oklch(0.72 0.20 58), oklch(0.82 0.18 72));
+
+  /* Legacy alias — keeps existing components working */
+  --gradient-purple: var(--gradient-primary);
+
+  --shadow-glow: 0 0 40px -8px oklch(0.76 0.18 65 / 0.5);
+  --shadow-glass: 0 8px 32px -8px oklch(0.08 0.01 45 / 0.65);
 }
 
 .dark { color-scheme: dark; }
@@ -131,6 +153,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     background-image: var(--gradient-aurora);
     background-attachment: fixed;
     overflow-x: hidden;
@@ -138,41 +161,91 @@
 
   h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
 
-  ::selection { background: oklch(0.66 0.22 295 / 0.35); }
+  ::selection { background: oklch(0.76 0.18 65 / 0.30); }
+
+  /* Minimum touch target size for phones */
+  button, a[role="button"], [role="tab"] {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  button:where(.flex-col, .flex-row), a:where(.flex-col, .flex-row) {
+    display: flex;
+  }
 }
 
 @layer components {
+  /* Glassmorphism — reduced blur for 3G performance */
   .glass {
-    background: color-mix(in oklab, var(--surface) 70%, transparent);
-    backdrop-filter: blur(22px) saturate(140%);
-    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    background: color-mix(in oklab, var(--surface) 78%, transparent);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
     border: 1px solid var(--border);
   }
   .glass-raised {
-    background: color-mix(in oklab, var(--surface-raised) 75%, transparent);
-    backdrop-filter: blur(28px) saturate(160%);
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    background: color-mix(in oklab, var(--surface-raised) 82%, transparent);
+    backdrop-filter: blur(18px) saturate(145%);
+    -webkit-backdrop-filter: blur(18px) saturate(145%);
     border: 1px solid var(--border);
     box-shadow: var(--shadow-glass);
   }
-  .text-gradient-purple {
-    background: var(--gradient-purple);
+
+  /* Text gradients */
+  .text-gradient-primary {
+    background: var(--gradient-primary);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
+  /* Legacy alias */
+  .text-gradient-purple { @apply text-gradient-primary; }
+
   .glow-ring {
-    box-shadow: 0 0 0 1px oklch(0.66 0.22 295 / 0.35), var(--shadow-glow);
+    box-shadow: 0 0 0 1px oklch(0.76 0.18 65 / 0.40), var(--shadow-glow);
   }
   .neon-divider {
     height: 1px;
-    background: linear-gradient(90deg, transparent, oklch(0.66 0.22 295 / 0.5), transparent);
+    background: linear-gradient(90deg, transparent, oklch(0.76 0.18 65 / 0.45), transparent);
+  }
+
+  /* Kente accent strip — decorative */
+  .kente-strip {
+    height: 3px;
+    background: linear-gradient(
+      90deg,
+      oklch(0.72 0.22 25),
+      oklch(0.76 0.18 65),
+      oklch(0.72 0.20 145),
+      oklch(0.76 0.18 65),
+      oklch(0.72 0.22 25)
+    );
+    border-radius: 999px;
+  }
+
+  /* RALD Auth box states */
+  .auth-box-corner {
+    pointer-events: none;
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    transition: border-color 0.3s ease, filter 0.3s ease;
   }
 }
 
 @layer utilities {
   .scrollbar-none::-webkit-scrollbar { display: none; }
   .scrollbar-none { scrollbar-width: none; }
-  .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+  .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
   .safe-top    { padding-top: max(env(safe-area-inset-top), 0px); }
+  .animate-shake { animation: var(--animate-shake); }
+
+  /* Reduce animations on slow devices */
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
