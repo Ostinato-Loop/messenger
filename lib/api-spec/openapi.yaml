@@ -19,6 +19,8 @@ tags:
     description: Messages
   - name: reactions
     description: Message reactions
+  - name: rtc
+    description: Tencent TRTC real-time communication
 
 paths:
   /healthz:
@@ -417,6 +419,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/OkResult"
 
+  /rtc/status:
+    get:
+      summary: Get Tencent TRTC configuration status
+      operationId: getRtcStatus
+      tags: [rtc]
+      responses:
+        "200":
+          description: RTC status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RtcStatus"
+
+  /rtc/token:
+    post:
+      summary: Generate TRTC UserSig token for a room
+      operationId: getRtcToken
+      tags: [rtc]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RtcTokenRequest"
+      responses:
+        "200":
+          description: TRTC token payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RtcToken"
+        "401":
+          description: Unauthorized
+        "503":
+          description: RTC not configured
+
 components:
   schemas:
     HealthStatus:
@@ -689,3 +727,37 @@ components:
           type: string
         user:
           $ref: "#/components/schemas/User"
+
+    RtcTokenRequest:
+      type: object
+      required: [roomId]
+      properties:
+        roomId:
+          type: string
+          minLength: 1
+          maxLength: 64
+
+    RtcStatus:
+      type: object
+      required: [configured]
+      properties:
+        configured:
+          type: boolean
+        sdkAppId:
+          type: integer
+          nullable: true
+
+    RtcToken:
+      type: object
+      required: [sdkAppId, userId, userSig, roomId, expireAt]
+      properties:
+        sdkAppId:
+          type: integer
+        userId:
+          type: string
+        userSig:
+          type: string
+        roomId:
+          type: string
+        expireAt:
+          type: integer

@@ -56,7 +56,7 @@ jobs:
           BASE_PATH: /
           PORT: "3000"
           NODE_ENV: production
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_API_URL: ${{ vars.VITE_API_URL || '' }}
         run: pnpm --filter @workspace/loop-messenger run build
 
       - name: Deploy to Cloudflare Pages
@@ -65,6 +65,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "⚠️  CLOUDFLARE_API_TOKEN not configured."
+            echo "   To enable Pages auto-deploy, add a Cloudflare API token with"
+            echo "   'Cloudflare Pages:Edit' permission as the secret"
+            echo "   CLOUDFLARE_API_TOKEN in your GitHub repo settings."
+            echo "   Skipping — all other checks remain green."
+            exit 0
+          fi
           npx wrangler@4.16.0 pages deploy artifacts/loop-messenger/dist/public \
             --project-name=loop-messenger \
             --branch=main

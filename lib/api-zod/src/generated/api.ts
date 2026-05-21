@@ -441,3 +441,32 @@ export const RemoveReactionResponse = zod.object({
 })
 
 
+/**
+ * @summary Get Tencent TRTC configuration status
+ */
+export const GetRtcStatusResponse = zod.object({
+  "configured": zod.boolean(),
+  "sdkAppId": zod.number().nullish()
+})
+
+
+/**
+ * @summary Generate TRTC UserSig token for a room
+ */
+export const getRtcTokenBodyRoomIdMax = 64;
+
+
+
+export const GetRtcTokenBody = zod.object({
+  "roomId": zod.string().min(1).max(getRtcTokenBodyRoomIdMax)
+})
+
+export const GetRtcTokenResponse = zod.object({
+  "sdkAppId": zod.number(),
+  "userId": zod.string(),
+  "userSig": zod.string(),
+  "roomId": zod.string(),
+  "expireAt": zod.number()
+})
+
+

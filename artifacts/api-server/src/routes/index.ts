@@ -4,6 +4,7 @@ import authRouter from "./auth";
 import usersRouter from "./users";
 import conversationsRouter from "./conversations";
 import messagesRouter from "./messages";
+import rtcRouter from "./rtc";
 
 const router: IRouter = Router();
 
@@ -13,5 +14,6 @@ router.use("/users", usersRouter);
 router.use("/conversations", conversationsRouter);
 // Messages routes are nested under /conversations and /messages
 router.use("/", messagesRouter);
+router.use("/rtc", rtcRouter);
 
 export default router;

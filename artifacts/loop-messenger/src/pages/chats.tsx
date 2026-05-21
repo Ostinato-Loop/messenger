@@ -29,9 +29,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Badge } from "@/components/ui/badge";
-import { Send, Plus, Search, MessageSquare, Phone, X, Check, Edit2, Trash2, Users } from "lucide-react";
+import { Send, Plus, Search, MessageSquare, Phone, X, Check, Edit2, Trash2, Users, Mic } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import loopLogo from "@assets/IMG_3832_1779368920403.jpeg";
+import { VoiceNoteRecorder, AudioMessage } from "@/components/voice-note-recorder";
+import { formatDuration } from "@/lib/trtc-client";
 
 const formatMessageTime = (dateStr: string) => format(new Date(dateStr), "HH:mm");
 
@@ -445,6 +447,7 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
 
   const [inputText, setInputText] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [voiceActive, setVoiceActive] = useState(false);
 
   useEffect(() => {
     markRead.mutate({ conversationId });
@@ -483,6 +486,27 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
         }
       );
     }
+  };
+
+  const handleVoiceSend = (dataUrl: string, durationSeconds: number) => {
+    sendMessage.mutate(
+      {
+        conversationId,
+        data: {
+          type: "audio",
+          content: `Voice note (${formatDuration(durationSeconds)})`,
+          mediaUrl: dataUrl,
+        },
+      },
+      {
+        onSuccess: () => {
+          setVoiceActive(false);
+          queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId) });
+          queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetConversationStatsQueryKey() });
+        },
+      }
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -590,6 +614,8 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
                       >
                         {msg.isDeleted ? (
                           <p className="italic opacity-60 text-sm">Message deleted</p>
+                        ) : msg.type === "audio" && msg.mediaUrl ? (
+                          <AudioMessage src={msg.mediaUrl} />
                         ) : (
                           <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                             {msg.content}
@@ -695,25 +721,46 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
             </button>
           </div>
         )}
-        <div className="relative flex items-center">
-          <Input
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            className={`pr-12 bg-input/50 border-border h-12 text-base ${
-              editingId ? "rounded-b-2xl rounded-t-none border-t-0" : "rounded-full"
-            }`}
-          />
-          <Button
-            size="icon"
-            className="absolute right-1 w-10 h-10 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_12px_rgba(255,107,0,0.4)]"
-            onClick={handleSend}
-            disabled={!inputText.trim() || sendMessage.isPending || editMessage.isPending}
-          >
-            <Send className="w-4 h-4" />
-          </Button>
-        </div>
+        {voiceActive ? (
+          <div className="flex items-center gap-2 flex-1">
+            <VoiceNoteRecorder
+              onSend={handleVoiceSend}
+              onCancel={() => setVoiceActive(false)}
+              disabled={sendMessage.isPending}
+              autoStart
+            />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVoiceActive(true)}
+              disabled={!!editingId}
+              className="w-10 h-10 flex-shrink-0 rounded-full bg-muted/50 hover:bg-primary/20 border border-border hover:border-primary/40 flex items-center justify-center transition-colors disabled:opacity-40"
+            >
+              <Mic className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <div className="relative flex-1">
+              <Input
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type a message..."
+                className={`pr-12 bg-input/50 border-border h-12 text-base ${
+                  editingId ? "rounded-b-2xl rounded-t-none border-t-0" : "rounded-full"
+                }`}
+              />
+              <Button
+                size="icon"
+                className="absolute right-1 top-1 w-10 h-10 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_12px_rgba(255,107,0,0.4)]"
+                onClick={handleSend}
+                disabled={!inputText.trim() || sendMessage.isPending || editMessage.isPending}
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

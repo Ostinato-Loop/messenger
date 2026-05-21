@@ -224,6 +224,27 @@ export interface ReactionInput {
   emoji: string;
 }
 
+export interface RtcTokenRequest {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  roomId: string;
+}
+
+export interface RtcStatus {
+  configured: boolean;
+  sdkAppId?: number | null;
+}
+
+export interface RtcToken {
+  sdkAppId: number;
+  userId: string;
+  userSig: string;
+  roomId: string;
+  expireAt: number;
+}
+
 export type SearchUsersParams = {
 q: string;
 };

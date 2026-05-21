@@ -35,6 +35,9 @@ import type {
   ProfileUpdate,
   Reaction,
   ReactionInput,
+  RtcStatus,
+  RtcToken,
+  RtcTokenRequest,
   SearchUsersParams,
   SendOtpInput,
   SendOtpResult,
@@ -1529,5 +1532,153 @@ export const useRemoveReaction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRemoveReactionMutationOptions(options));
+    }
+
+export const getGetRtcStatusUrl = () => {
+
+
+
+
+  return `/api/rtc/status`
+}
+
+/**
+ * @summary Get Tencent TRTC configuration status
+ */
+export const getRtcStatus = async ( options?: RequestInit): Promise<RtcStatus> => {
+
+  return customFetch<RtcStatus>(getGetRtcStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRtcStatusQueryKey = () => {
+    return [
+    `/api/rtc/status`
+    ] as const;
+    }
+
+
+export const getGetRtcStatusQueryOptions = <TData = Awaited<ReturnType<typeof getRtcStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRtcStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRtcStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRtcStatus>>> = ({ signal }) => getRtcStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRtcStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRtcStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getRtcStatus>>>
+export type GetRtcStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get Tencent TRTC configuration status
+ */
+
+export function useGetRtcStatus<TData = Awaited<ReturnType<typeof getRtcStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRtcStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRtcStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetRtcTokenUrl = () => {
+
+
+
+
+  return `/api/rtc/token`
+}
+
+/**
+ * @summary Generate TRTC UserSig token for a room
+ */
+export const getRtcToken = async (rtcTokenRequest: RtcTokenRequest, options?: RequestInit): Promise<RtcToken> => {
+
+  return customFetch<RtcToken>(getGetRtcTokenUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      rtcTokenRequest,)
+  }
+);}
+
+
+
+
+export const getGetRtcTokenMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getRtcToken>>, TError,{data: BodyType<RtcTokenRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof getRtcToken>>, TError,{data: BodyType<RtcTokenRequest>}, TContext> => {
+
+const mutationKey = ['getRtcToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof getRtcToken>>, {data: BodyType<RtcTokenRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  getRtcToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GetRtcTokenMutationResult = NonNullable<Awaited<ReturnType<typeof getRtcToken>>>
+    export type GetRtcTokenMutationBody = BodyType<RtcTokenRequest>
+    export type GetRtcTokenMutationError = ErrorType<void>
+
+    /**
+ * @summary Generate TRTC UserSig token for a room
+ */
+export const useGetRtcToken = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof getRtcToken>>, TError,{data: BodyType<RtcTokenRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof getRtcToken>>,
+        TError,
+        {data: BodyType<RtcTokenRequest>},
+        TContext
+      > => {
+      return useMutation(getGetRtcTokenMutationOptions(options));
     }
 
