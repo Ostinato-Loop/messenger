@@ -199,8 +199,13 @@
     background-clip: text;
     color: transparent;
   }
-  /* Legacy alias */
-  .text-gradient-purple { @apply text-gradient-primary; }
+  /* Legacy alias — same properties, no @apply (Tailwind v4) */
+  .text-gradient-purple {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 
   .glow-ring {
     box-shadow: 0 0 0 1px oklch(0.76 0.18 65 / 0.40), var(--shadow-glow);
