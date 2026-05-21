@@ -1,4 +1,4 @@
-name: Deploy — Cloudflare Worker (API Gateway)
+name: Deploy - Cloudflare Worker API Gateway
 
 on:
   push:
@@ -21,9 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    environment:
-      name: production
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,34 +34,36 @@ jobs:
         working-directory: workers/loop-messenger-api
         run: npm install
 
-      - name: Deploy worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: workers/loop-messenger-api
-          command: deploy --minify
-
-      - name: Set TERMII_API_KEY secret
-        if: ${{ secrets.TERMII_API_KEY != '' }}
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: workers/loop-messenger-api
-          command: secret put TERMII_API_KEY
+      - name: Deploy worker to Cloudflare
+        working-directory: workers/loop-messenger-api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --minify
+
+      - name: Push TERMII_API_KEY secret to worker
+        if: ${{ vars.TERMII_API_KEY != '' || true }}
+        working-directory: workers/loop-messenger-api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TERMII_API_KEY: ${{ secrets.TERMII_API_KEY }}
+        run: |
+          if [ -n "$TERMII_API_KEY" ]; then
+            echo "$TERMII_API_KEY" | npx wrangler secret put TERMII_API_KEY
+          else
+            echo "TERMII_API_KEY not set — skipping"
+          fi
 
-      - name: Set API_ORIGIN secret
-        if: ${{ secrets.API_ORIGIN_URL != '' }}
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: workers/loop-messenger-api
-          command: secret put API_ORIGIN
+      - name: Push API_ORIGIN secret to worker
+        working-directory: workers/loop-messenger-api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          API_ORIGIN: ${{ secrets.API_ORIGIN_URL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_ORIGIN_URL: ${{ secrets.API_ORIGIN_URL }}
+        run: |
+          if [ -n "$API_ORIGIN_URL" ]; then
+            echo "$API_ORIGIN_URL" | npx wrangler secret put API_ORIGIN
+          else
+            echo "API_ORIGIN_URL not set — skipping"
+          fi
