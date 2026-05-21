@@ -1,19 +1,26 @@
-name: Deploy Cloudflare Worker
+name: Deploy to Cloudflare Workers
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false   # never cancel an in-flight deploy
+
 jobs:
   deploy:
-    name: Deploy to Cloudflare Workers
+    name: Build & Deploy Worker
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
@@ -23,28 +30,22 @@ jobs:
       - name: Build
         run: bun run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          # Public Supabase vars baked into the client bundle
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_RALD_API_URL: ${{ secrets.VITE_RALD_API_URL }}
 
       - name: Deploy via Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Server-side secrets injected into the Worker runtime
           secrets: |
             TERMII_API_KEY
             SUPABASE_SERVICE_ROLE_KEY
-            SUPABASE_URL
             SUPABASE_PUBLISHABLE_KEY
-            TERMII_SENDER_ID
-            TERMII_BASE_URL
-            TERMII_CHANNEL
         env:
           TERMII_API_KEY: ${{ secrets.TERMII_API_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          TERMII_SENDER_ID: ${{ secrets.TERMII_SENDER_ID }}
-          TERMII_BASE_URL: ${{ secrets.TERMII_BASE_URL }}
-          TERMII_CHANNEL: ${{ secrets.TERMII_CHANNEL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          # Non-sensitive vars are set in wrangler.jsonc [vars] — no need to pass as secrets
