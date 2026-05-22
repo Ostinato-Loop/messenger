@@ -76,17 +76,18 @@ async function handleSmsHook(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       to: phone,
-      from: env.TERMII_SENDER_ID || "N-Alert",
+      from: "N-Alert",
       sms: body.message,
       type: "plain",
-      channel: "generic",
+      channel: "dnd",
       api_key: env.TERMII_API_KEY,
     }),
   });
 
-  const result = await termiiRes.json();
+  const result = (await termiiRes.json()) as Record<string, unknown>;
+  const termiiOk = !!(result.message_id || result.code === "ok");
   return new Response(JSON.stringify(result), {
-    status: termiiRes.ok ? 200 : 502,
+    status: termiiOk ? 200 : 502,
     headers: { "Content-Type": "application/json", ...cors },
   });
 }

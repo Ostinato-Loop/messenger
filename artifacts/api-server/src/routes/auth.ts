@@ -6,6 +6,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gt } from "drizzle-orm";
 import { z } from "zod";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -24,31 +25,51 @@ function normalizePhone(phone: string): string {
   return phone;
 }
 
-async function sendTermiiOtp(phone: string, code: string): Promise<void> {
+async function sendTermiiOtp(
+  phone: string,
+  code: string,
+): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.TERMII_API_KEY;
-  const senderId = process.env.TERMII_SENDER_ID || "N-Alert";
 
   if (!apiKey) {
-    throw new Error("TERMII_API_KEY not configured");
+    return { ok: false, error: "TERMII_API_KEY not configured" };
   }
 
-  const response = await fetch("https://v3.api.termii.com/api/sms/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      to: phone,
-      from: senderId,
-      sms: `Your Loop Messenger verification code is: ${code}. Valid for 10 minutes. Do not share this code.`,
-      type: "plain",
-      channel: "generic",
-      api_key: apiKey,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`TERMII error: ${err}`);
+  let response: globalThis.Response;
+  try {
+    response = await fetch("https://v3.api.termii.com/api/sms/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: phone,
+        from: "N-Alert",
+        sms: `Your Loop Messenger verification code is: ${code}. Valid for 10 minutes. Do not share this code.`,
+        type: "plain",
+        channel: "dnd",
+        api_key: apiKey,
+      }),
+    });
+  } catch {
+    return { ok: false, error: "Network error contacting SMS service" };
   }
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await response.json()) as Record<string, unknown>;
+  } catch {
+    // Non-JSON response — fall through to HTTP status check
+  }
+
+  // TERMII success: message_id present or code === "ok"
+  if (body.message_id || body.code === "ok") {
+    return { ok: true };
+  }
+
+  const errMsg =
+    typeof body.message === "string"
+      ? body.message
+      : `HTTP ${response.status}`;
+  return { ok: false, error: errMsg };
 }
 
 // POST /auth/send-otp
@@ -86,13 +107,30 @@ router.post("/send-otp", async (req: Request, res: Response) => {
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-  await db.insert(otpRequestsTable).values({ phone, code, expiresAt });
+  const [inserted] = await db
+    .insert(otpRequestsTable)
+    .values({ phone, code, expiresAt })
+    .returning();
 
-  try {
-    await sendTermiiOtp(phone, code);
-  } catch (err) {
-    // In dev, log the OTP so it can be tested without TERMII credits
-    console.log(`[DEV] OTP for ${phone}: ${code}`);
+  const smsResult = await sendTermiiOtp(phone, code);
+
+  if (!smsResult.ok) {
+    logger.warn({ errMsg: smsResult.error }, "TERMII OTP delivery failed");
+    // Roll back so the user can retry immediately
+    await db.delete(otpRequestsTable).where(eq(otpRequestsTable.id, inserted.id));
+
+    if (process.env.NODE_ENV !== "production") {
+      // Dev: surface the code in-response — no credentials needed for local testing
+      return void res.json({
+        message: "OTP sent (dev mode — TERMII skipped)",
+        cooldownSeconds: 600,
+        devOtp: code,
+      });
+    }
+
+    return void res.status(502).json({
+      error: "SMS delivery failed. Please try again.",
+    });
   }
 
   return void res.json({ message: "OTP sent successfully", cooldownSeconds: 600 });
