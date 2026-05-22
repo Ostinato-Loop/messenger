@@ -1,9 +1,10 @@
-// Loop Messenger — Production Service Worker v2
+// Loop Messenger — Production Service Worker v3
 // Strategy: cache-first static, network-first API with 4s timeout for 3G/2G resilience
+// v3 adds: Web Push notifications for incoming calls + missed call alerts
 
-const CACHE_VERSION = "loop-v2";
+const CACHE_VERSION = "loop-v3";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const API_CACHE = `${CACHE_VERSION}-api`;
+const API_CACHE    = `${CACHE_VERSION}-api`;
 
 const STATIC_EXTENSIONS = [".js", ".css", ".woff2", ".woff", ".ttf", ".png", ".svg", ".jpg", ".webp"];
 const API_PATHS = ["/api/"];
@@ -16,10 +17,12 @@ function isApiRequest(url) {
   return API_PATHS.some((p) => url.pathname.startsWith(p));
 }
 
-self.addEventListener("install", (event) => {
+// ── Install ────────────────────────────────────────────────────────────────
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
+// ── Activate ───────────────────────────────────────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -30,15 +33,14 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// ── Fetch ──────────────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Never intercept non-GET or cross-origin requests we don't control
   if (event.request.method !== "GET") return;
   if (url.origin !== self.location.origin && !url.hostname.endsWith("fonts.gstatic.com")) return;
 
   if (isStaticAsset(url)) {
-    // Cache-first: static hashed assets never change
     event.respondWith(
       caches.open(STATIC_CACHE).then(async (cache) => {
         const cached = await cache.match(event.request);
@@ -52,7 +54,6 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isApiRequest(url)) {
-    // Network-first: API always fresh, fall back to cache on 3G timeout
     event.respondWith(
       fetch(event.request.clone()).then((res) => {
         if (res.ok) {
@@ -70,11 +71,86 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // HTML shell — network first, fall back to cached shell
   event.respondWith(
     fetch(event.request).catch(async () => {
       const cached = await caches.match("/");
       return cached || new Response("Offline", { status: 503 });
+    })
+  );
+});
+
+// ── Push Notifications ─────────────────────────────────────────────────────
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    return;
+  }
+
+  if (payload.type === "incoming_call") {
+    const callType = payload.callType === "video" ? "Video" : "Voice";
+    const callerName = payload.initiatorName || "Someone";
+
+    const title   = `Incoming ${callType} Call`;
+    const options = {
+      body: `${callerName} is calling you on Loop`,
+      icon: "/opengraph.jpg",
+      badge: "/favicon.svg",
+      tag: `call-${payload.callId}`,
+      renotify: true,
+      requireInteraction: true,       // keep visible until user acts
+      vibrate: [200, 100, 200, 100, 200],
+      data: {
+        type: "incoming_call",
+        callId: payload.callId,
+        conversationId: payload.conversationId,
+        url: `/chats/${payload.conversationId}`,
+      },
+      actions: [
+        { action: "answer", title: "Answer" },
+        { action: "decline", title: "Decline" },
+      ],
+    };
+
+    event.waitUntil(self.registration.showNotification(title, options));
+  }
+});
+
+// ── Notification Click ─────────────────────────────────────────────────────
+self.addEventListener("notificationclick", (event) => {
+  const notification = event.notification;
+  notification.close();
+
+  const data = notification.data || {};
+
+  if (event.action === "decline" && data.callId) {
+    // Fire-and-forget reject — best effort while app is in background
+    event.waitUntil(
+      fetch(`/api/rtc/calls/${data.callId}/reject`, {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => {})
+    );
+    return;
+  }
+
+  // "answer" action or generic click — focus/open the app to the conversation
+  const targetUrl = data.url || "/chats";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Focus an existing tab if available
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin)) {
+          client.postMessage({ type: "incoming_call_tap", ...data });
+          return client.focus();
+        }
+      }
+      // Otherwise open a new tab
+      return self.clients.openWindow(targetUrl);
     })
   );
 });

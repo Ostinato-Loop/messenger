@@ -85,3 +85,57 @@ jobs:
           else
             echo "ℹ️  API_ORIGIN_URL not set in GitHub secrets — skipping."
           fi
+
+      - name: Push VAPID_PUBLIC_KEY secret to worker
+        working-directory: workers/loop-messenger-api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Skipping — CLOUDFLARE_WORKERS_TOKEN not set."
+            exit 0
+          fi
+          if [ -n "$VAPID_PUBLIC_KEY" ]; then
+            echo "$VAPID_PUBLIC_KEY" | npx wrangler secret put VAPID_PUBLIC_KEY
+            echo "✅ VAPID_PUBLIC_KEY pushed to worker."
+          else
+            echo "ℹ️  VAPID_PUBLIC_KEY not set in GitHub secrets — skipping."
+          fi
+
+      - name: Push VAPID_PRIVATE_KEY secret to worker
+        working-directory: workers/loop-messenger-api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Skipping — CLOUDFLARE_WORKERS_TOKEN not set."
+            exit 0
+          fi
+          if [ -n "$VAPID_PRIVATE_KEY" ]; then
+            echo "$VAPID_PRIVATE_KEY" | npx wrangler secret put VAPID_PRIVATE_KEY
+            echo "✅ VAPID_PRIVATE_KEY pushed to worker."
+          else
+            echo "ℹ️  VAPID_PRIVATE_KEY not set in GitHub secrets — skipping."
+          fi
+
+      - name: Push VAPID_SUBJECT secret to worker
+        working-directory: workers/loop-messenger-api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Skipping — CLOUDFLARE_WORKERS_TOKEN not set."
+            exit 0
+          fi
+          if [ -n "$VAPID_SUBJECT" ]; then
+            echo "$VAPID_SUBJECT" | npx wrangler secret put VAPID_SUBJECT
+            echo "✅ VAPID_SUBJECT pushed to worker."
+          else
+            echo "ℹ️  VAPID_SUBJECT not set in GitHub secrets — skipping."
+          fi

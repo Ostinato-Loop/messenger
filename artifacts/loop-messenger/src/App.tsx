@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState } from "react";
+import React, { lazy, Suspense, useState, useEffect } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,6 +10,7 @@ import { InCallView } from "@/components/in-call-view";
 import { IncomingCallModal } from "@/components/incoming-call-modal";
 import { OfflineBanner } from "@/components/skeleton-loaders";
 import { useIsOffline } from "@/lib/network";
+import { initPushNotifications } from "@/lib/notification.service";
 
 // Lazy-loaded pages — code split for 3G/4G optimization
 const AuthPage        = lazy(() => import("@/pages/auth"));
@@ -43,7 +44,7 @@ function RootRedirect() {
   const { data: user, isLoading } = useGetMe({ query: { retry: false } as any });
   const [, setLocation] = useLocation();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isLoading) {
       setLocation(user ? "/chats" : "/auth");
     }
@@ -77,6 +78,16 @@ function AuthenticatedShell({ splashDone, onSplashDone }: { splashDone: boolean;
   const { data: me } = useGetMe({ query: { retry: false, staleTime: 60_000 } as any });
   const isOffline = useIsOffline();
 
+  // Init Web Push once the user is authenticated
+  useEffect(() => {
+    if (!me) return;
+    // Defer until after first paint to avoid blocking the UI thread
+    const tid = setTimeout(() => {
+      initPushNotifications().catch(() => {});
+    }, 2000);
+    return () => clearTimeout(tid);
+  }, [me]);
+
   return (
     <CallProvider me={me as any}>
       {isOffline && <OfflineBanner />}
@@ -91,14 +102,23 @@ function AuthenticatedShell({ splashDone, onSplashDone }: { splashDone: boolean;
 function App() {
   const [splashDone, setSplashDone] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     document.documentElement.classList.add("dark");
 
-    // Register service worker
+    // Register service worker (v3 — adds push notification support)
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js", { scope: "/" })
         .catch(() => { /* SW registration is best-effort */ });
+    }
+
+    // Listen for incoming_call_tap from service worker (background notification click)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", (event) => {
+        if (event.data?.type === "incoming_call_tap" && event.data.url) {
+          window.location.href = event.data.url;
+        }
+      });
     }
   }, []);
 

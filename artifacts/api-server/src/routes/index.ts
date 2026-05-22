@@ -6,6 +6,7 @@ import conversationsRouter from "./conversations";
 import messagesRouter from "./messages";
 import rtcRouter from "./rtc";
 import callsRouter from "./calls";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -17,5 +18,6 @@ router.use("/conversations", conversationsRouter);
 router.use("/", messagesRouter);
 router.use("/rtc", rtcRouter);
 router.use("/rtc/calls", callsRouter);
+router.use("/notifications", notificationsRouter);
 
 export default router;

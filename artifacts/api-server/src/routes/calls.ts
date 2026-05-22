@@ -10,9 +10,10 @@
  */
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { db, callsTable } from "@workspace/db";
+import { db, callsTable, pushSubscriptionsTable, usersTable } from "@workspace/db";
 import { eq, and, or } from "drizzle-orm";
 import { genTRTCUserSig, isTRTCConfigured } from "../lib/tencent-sig";
+import { sendPushNotification, isWebPushConfigured } from "../lib/webpush";
 import { randomUUID } from "crypto";
 
 const router = Router();
@@ -23,6 +24,43 @@ function getRtcCredentials(userId: number) {
   const trtcUserId = `loop_${userId}`;
   const userSig = genTRTCUserSig(sdkAppId, secretKey, trtcUserId, 86400 * 7);
   return { sdkAppId, userId: trtcUserId, userSig };
+}
+
+/**
+ * Fire-and-forget: send a Web Push notification to all of a user's subscriptions.
+ * Automatically cleans up expired/gone subscriptions (410/404).
+ */
+async function notifyUserOfCall(
+  respondentId: number,
+  payload: {
+    type: "incoming_call";
+    callId: number;
+    roomId: string;
+    callType: "voice" | "video";
+    initiatorId: number;
+    initiatorName: string;
+    conversationId: number;
+  },
+): Promise<void> {
+  if (!isWebPushConfigured()) return;
+
+  const subs = await db
+    .select()
+    .from(pushSubscriptionsTable)
+    .where(eq(pushSubscriptionsTable.userId, respondentId));
+
+  for (const sub of subs) {
+    sendPushNotification(
+      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+      payload,
+    ).catch((err: Error) => {
+      if (err.message === "SUBSCRIPTION_EXPIRED") {
+        db.delete(pushSubscriptionsTable)
+          .where(eq(pushSubscriptionsTable.endpoint, sub.endpoint))
+          .catch(() => {});
+      }
+    });
+  }
 }
 
 // POST /rtc/calls/start
@@ -70,6 +108,24 @@ router.post("/start", async (req: Request, res: Response) => {
   if (isTRTCConfigured()) {
     rtcCredentials = getRtcCredentials(me);
   }
+
+  // Fetch initiator name for the push notification
+  const [initiator] = await db
+    .select({ displayName: usersTable.displayName })
+    .from(usersTable)
+    .where(eq(usersTable.id, me))
+    .limit(1);
+
+  // Fire-and-forget push notification to the respondent
+  notifyUserOfCall(respondentId, {
+    type: "incoming_call",
+    callId: call.id,
+    roomId: call.roomId,
+    callType: call.type,
+    initiatorId: me,
+    initiatorName: initiator?.displayName ?? "Someone",
+    conversationId,
+  });
 
   return void res.status(201).json({
     callId: call.id,
