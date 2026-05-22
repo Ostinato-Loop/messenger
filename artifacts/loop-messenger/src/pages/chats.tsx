@@ -37,6 +37,9 @@ import { formatDuration } from "@/lib/trtc-client";
 import { useNetworkQuality } from "@/lib/network";
 import { SkeletonMessageList, SkeletonConversationList, NetworkBadge } from "@/components/skeleton-loaders";
 import { useCall } from "@/lib/call-provider";
+import { usePresence } from "@/lib/presence";
+import { useTyping } from "@/lib/typing";
+import { useRealtimeMessages } from "@/lib/realtime-messages";
 
 const formatMessageTime = (dateStr: string) => format(new Date(dateStr), "HH:mm");
 
@@ -56,6 +59,7 @@ export default function ChatsPage() {
   const queryClient = useQueryClient();
 
   const { data: me } = useGetMe();
+  const { onlineUserIds } = usePresence(me?.id);
   const network = useNetworkQuality();
   const { data: conversations, isLoading: isLoadingConvs } = useListConversations({
     query: { refetchInterval: network.pollInterval > 0 ? network.pollInterval : false } as any,
@@ -370,7 +374,11 @@ export default function ChatsPage() {
                           )}
                         </AvatarFallback>
                       </Avatar>
-                      {!isGroup && otherMember?.isOnline && (
+                      {!isGroup && otherMember && (
+                        onlineUserIds.size > 0
+                          ? onlineUserIds.has(otherMember.id)
+                          : otherMember.isOnline
+                      ) && (
                         <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" />
                       )}
                       {isGroup && (
@@ -423,7 +431,7 @@ export default function ChatsPage() {
         }`}
       >
         {activeConvId ? (
-          <ActiveChat conversationId={activeConvId} me={me} />
+          <ActiveChat conversationId={activeConvId} me={me} onlineUserIds={onlineUserIds} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
             <img src={loopLogo} alt="Loop" className="w-24 h-24 mb-6 opacity-20 grayscale rounded-3xl" />
@@ -436,7 +444,7 @@ export default function ChatsPage() {
   );
 }
 
-function ActiveChat({ conversationId, me }: { conversationId: number; me: any }) {
+function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: number; me: any; onlineUserIds: Set<number> }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -444,6 +452,10 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
   const { data: conv } = useGetConversation(conversationId);
   const network = useNetworkQuality();
   const { startCall } = useCall();
+
+  useRealtimeMessages(conversationId);
+  const typing = useTyping(conversationId, me?.id, me?.displayName);
+
   const { data: messages, isLoading } = useListMessages(conversationId, {
     query: { refetchInterval: network.pollInterval > 0 ? network.pollInterval : false } as any,
   });
@@ -471,6 +483,7 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
 
   const handleSend = () => {
     if (!inputText.trim()) return;
+    typing.onSend();
 
     if (editingId) {
       const text = inputText;
@@ -531,9 +544,13 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
   };
 
   const isGroup = conv?.type === "group";
-  const otherMember = !isGroup
-    ? conv?.members.find((m) => m.userId !== me?.id)?.user
+  const otherMemberEntry = !isGroup
+    ? conv?.members.find((m) => m.userId !== me?.id)
     : undefined;
+  const otherMember = otherMemberEntry?.user;
+  const otherLastReadAt = otherMemberEntry?.lastReadAt
+    ? new Date(otherMemberEntry.lastReadAt)
+    : null;
   const name = conv?.name || otherMember?.displayName || "Loading...";
   const avatar = conv?.avatar || otherMember?.avatar;
 
@@ -562,8 +579,12 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
               <p className="text-xs text-muted-foreground">
                 {conv?.members?.length} members
               </p>
-            ) : otherMember?.isOnline ? (
+            ) : (onlineUserIds.size > 0 ? onlineUserIds.has(otherMember?.id ?? 0) : otherMember?.isOnline) ? (
               <p className="text-xs text-primary">Online</p>
+            ) : otherMember?.lastSeen ? (
+              <p className="text-xs text-muted-foreground">
+                last seen {format(new Date(otherMember.lastSeen), "HH:mm")}
+              </p>
             ) : null}
           </div>
         </div>
@@ -657,7 +678,16 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
                         >
                           {msg.editedAt && <span>edited</span>}
                           <span>{formatMessageTime(msg.createdAt)}</span>
-                          {isMe && <Check className="w-3 h-3" />}
+                          {isMe && (
+                            otherLastReadAt && new Date(msg.createdAt) <= otherLastReadAt ? (
+                              <span className="flex -space-x-1.5">
+                                <Check className="w-3 h-3 text-primary" />
+                                <Check className="w-3 h-3 text-primary" />
+                              </span>
+                            ) : (
+                              <Check className="w-3 h-3 opacity-70" />
+                            )
+                          )}
                         </div>
                         {msg.reactions && msg.reactions.length > 0 && (
                           <div className="absolute -bottom-3 left-4 flex gap-0.5 bg-background border border-border rounded-full px-1.5 py-0.5 shadow-sm">
@@ -730,6 +760,21 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
         )}
       </div>
 
+      {/* Typing indicator */}
+      {typing.typingUsers.length > 0 && (
+        <div className="px-5 py-1.5 text-xs text-primary flex items-center gap-2 bg-background/60 border-t border-border/40">
+          <span className="flex gap-0.5 items-center">
+            <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]" />
+            <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]" />
+            <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" />
+          </span>
+          <span>
+            {typing.typingUsers.map((u) => u.displayName).join(", ")}{" "}
+            {typing.typingUsers.length === 1 ? "is" : "are"} typing…
+          </span>
+        </div>
+      )}
+
       {/* Input bar */}
       <div className="p-4 bg-background/80 backdrop-blur-xl border-t border-border z-10 flex-shrink-0">
         {editingId && (
@@ -770,7 +815,10 @@ function ActiveChat({ conversationId, me }: { conversationId: number; me: any })
             <div className="relative flex-1">
               <Input
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                onChange={(e) => {
+                  setInputText(e.target.value);
+                  typing.onInputChange(e.target.value);
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message..."
                 className={`pr-12 bg-input/50 border-border h-12 text-base ${

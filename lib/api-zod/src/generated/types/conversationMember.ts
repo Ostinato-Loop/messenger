@@ -12,5 +12,6 @@ export interface ConversationMember {
   userId: number;
   role: ConversationMemberRole;
   joinedAt: string;
+  lastReadAt: string;
   user: User;
 }

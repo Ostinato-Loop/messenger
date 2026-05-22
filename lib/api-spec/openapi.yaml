@@ -602,7 +602,7 @@ components:
 
     ConversationMember:
       type: object
-      required: [userId, role, joinedAt, user]
+      required: [userId, role, joinedAt, lastReadAt, user]
       properties:
         userId:
           type: integer
@@ -610,6 +610,8 @@ components:
           type: string
           enum: [admin, member]
         joinedAt:
+          type: string
+        lastReadAt:
           type: string
         user:
           $ref: "#/components/schemas/User"

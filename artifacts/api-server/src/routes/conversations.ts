@@ -47,6 +47,7 @@ async function getConversationWithMembers(convId: number) {
       userId: m.member.userId,
       role: m.member.role,
       joinedAt: m.member.joinedAt.toISOString(),
+      lastReadAt: m.member.lastReadAt.toISOString(),
       user: formatUser(m.user),
     })),
   };
@@ -136,6 +137,7 @@ router.get("/", async (req: Request, res: Response) => {
           userId: m.member.userId,
           role: m.member.role,
           joinedAt: m.member.joinedAt.toISOString(),
+          lastReadAt: m.member.lastReadAt.toISOString(),
           user: formatUser(m.user),
         })),
         createdAt: conv.createdAt.toISOString(),

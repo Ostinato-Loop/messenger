@@ -187,6 +187,7 @@ export const ListConversationsResponseItem = zod.object({
   "userId": zod.number(),
   "role": zod.enum(['admin', 'member']),
   "joinedAt": zod.string(),
+  "lastReadAt": zod.string(),
   "user": zod.object({
   "id": zod.number(),
   "phone": zod.string(),
@@ -240,6 +241,7 @@ export const GetConversationResponse = zod.object({
   "userId": zod.number(),
   "role": zod.enum(['admin', 'member']),
   "joinedAt": zod.string(),
+  "lastReadAt": zod.string(),
   "user": zod.object({
   "id": zod.number(),
   "phone": zod.string(),
