@@ -1,14 +1,14 @@
 import { Router, Request, Response } from "express";
 import { db } from "@workspace/db";
-import {
-  usersTable,
-  otpRequestsTable,
-} from "@workspace/db";
+import { usersTable, otpRequestsTable } from "@workspace/db";
 import { eq, and, gt } from "drizzle-orm";
 import { z } from "zod";
 import { logger } from "../lib/logger";
+import { sendTermiiOtp } from "../lib/termii";
 
 const router = Router();
+
+type SessionData = Record<string, unknown>;
 
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -25,53 +25,6 @@ function normalizePhone(phone: string): string {
   return phone;
 }
 
-async function sendTermiiOtp(
-  phone: string,
-  code: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const apiKey = process.env.TERMII_API_KEY;
-
-  if (!apiKey) {
-    return { ok: false, error: "TERMII_API_KEY not configured" };
-  }
-
-  let response: globalThis.Response;
-  try {
-    response = await fetch("https://v3.api.termii.com/api/sms/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        to: phone,
-        from: process.env.TERMII_SENDER_ID ?? "N-Alert",
-        sms: `Your Loop Messenger verification code is: ${code}. Valid for 10 minutes. Do not share this code.`,
-        type: "plain",
-        channel: "dnd",
-        api_key: apiKey,
-      }),
-    });
-  } catch {
-    return { ok: false, error: "Network error contacting SMS service" };
-  }
-
-  let body: Record<string, unknown> = {};
-  try {
-    body = (await response.json()) as Record<string, unknown>;
-  } catch {
-    // Non-JSON response — fall through to HTTP status check
-  }
-
-  // TERMII success: message_id present or code === "ok"
-  if (body.message_id || body.code === "ok") {
-    return { ok: true };
-  }
-
-  const errMsg =
-    typeof body.message === "string"
-      ? body.message
-      : `HTTP ${response.status}`;
-  return { ok: false, error: errMsg };
-}
-
 // POST /auth/send-otp
 router.post("/send-otp", async (req: Request, res: Response) => {
   const schema = z.object({ phone: z.string().min(8) });
@@ -82,21 +35,21 @@ router.post("/send-otp", async (req: Request, res: Response) => {
 
   const phone = normalizePhone(parsed.data.phone);
 
-  // Rate limit: check last OTP was sent > 60s ago
+  // Rate limit: block if a valid OTP already exists
   const recent = await db
     .select()
     .from(otpRequestsTable)
     .where(
       and(
         eq(otpRequestsTable.phone, phone),
-        gt(otpRequestsTable.expiresAt, new Date())
-      )
+        gt(otpRequestsTable.expiresAt, new Date()),
+      ),
     )
     .limit(1);
 
   if (recent.length > 0) {
     const secondsLeft = Math.ceil(
-      (recent[0].expiresAt.getTime() - Date.now()) / 1000
+      (recent[0].expiresAt.getTime() - Date.now()) / 1000,
     );
     return void res.status(429).json({
       error: "OTP already sent. Please wait before requesting a new one.",
@@ -105,7 +58,7 @@ router.post("/send-otp", async (req: Request, res: Response) => {
   }
 
   const code = generateOtp();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
   const [inserted] = await db
     .insert(otpRequestsTable)
@@ -115,12 +68,12 @@ router.post("/send-otp", async (req: Request, res: Response) => {
   const smsResult = await sendTermiiOtp(phone, code);
 
   if (!smsResult.ok) {
-    logger.warn({ errMsg: smsResult.error }, "TERMII OTP delivery failed");
+    logger.warn({ errMsg: smsResult.error }, "SMS OTP delivery failed");
 
     if (process.env.NODE_ENV !== "production") {
-      // Dev: keep OTP in DB so devOtp can still be verified
+      // Dev mode: keep OTP in DB so devOtp can still be verified
       return void res.json({
-        message: "OTP sent (dev mode — TERMII skipped)",
+        message: "OTP sent (dev mode — SMS skipped)",
         cooldownSeconds: 600,
         devOtp: code,
       });
@@ -152,21 +105,25 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
     .where(
       and(
         eq(otpRequestsTable.phone, phone),
-        gt(otpRequestsTable.expiresAt, new Date())
-      )
+        gt(otpRequestsTable.expiresAt, new Date()),
+      ),
     )
     .orderBy(otpRequestsTable.createdAt)
     .limit(1);
 
   if (otpRecord.length === 0) {
-    return void res.status(400).json({ error: "OTP expired or not found. Please request a new one." });
+    return void res
+      .status(400)
+      .json({ error: "OTP expired or not found. Please request a new one." });
   }
 
   const otp = otpRecord[0];
 
   if (otp.attempts >= 5) {
     await db.delete(otpRequestsTable).where(eq(otpRequestsTable.id, otp.id));
-    return void res.status(400).json({ error: "Too many attempts. Please request a new OTP." });
+    return void res
+      .status(400)
+      .json({ error: "Too many attempts. Please request a new OTP." });
   }
 
   if (otp.code !== parsed.data.code) {
@@ -206,7 +163,7 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
   }
 
   const u = user[0];
-  (req.session as any).userId = u.id;
+  (req.session as SessionData).userId = u.id;
 
   return void res.json({
     user: {
@@ -225,7 +182,7 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
 
 // GET /auth/me
 router.get("/me", async (req: Request, res: Response) => {
-  const userId = (req.session as any).userId;
+  const userId = (req.session as SessionData).userId;
   if (!userId) {
     return void res.status(401).json({ error: "Unauthorized" });
   }
@@ -233,7 +190,7 @@ router.get("/me", async (req: Request, res: Response) => {
   const user = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.id, userId))
+    .where(eq(usersTable.id, userId as number))
     .limit(1);
 
   if (user.length === 0) {
@@ -255,12 +212,12 @@ router.get("/me", async (req: Request, res: Response) => {
 
 // POST /auth/logout
 router.post("/logout", async (req: Request, res: Response) => {
-  const userId = (req.session as any).userId;
+  const userId = (req.session as SessionData).userId;
   if (userId) {
     await db
       .update(usersTable)
       .set({ isOnline: false, lastSeen: new Date() })
-      .where(eq(usersTable.id, userId));
+      .where(eq(usersTable.id, userId as number));
   }
   req.session.destroy(() => {});
   return void res.json({ ok: true });
@@ -268,7 +225,7 @@ router.post("/logout", async (req: Request, res: Response) => {
 
 // PATCH /auth/profile
 router.patch("/profile", async (req: Request, res: Response) => {
-  const userId = (req.session as any).userId;
+  const userId = (req.session as SessionData).userId;
   if (!userId) {
     return void res.status(401).json({ error: "Unauthorized" });
   }
@@ -286,7 +243,7 @@ router.patch("/profile", async (req: Request, res: Response) => {
   const updated = await db
     .update(usersTable)
     .set(parsed.data)
-    .where(eq(usersTable.id, userId))
+    .where(eq(usersTable.id, userId as number))
     .returning();
 
   const u = updated[0];
