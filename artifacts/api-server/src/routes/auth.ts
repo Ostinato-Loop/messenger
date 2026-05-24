@@ -42,7 +42,7 @@ async function sendTermiiOtp(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         to: phone,
-        from: "N-Alert",
+        from: process.env.TERMII_SENDER_ID ?? "N-Alert",
         sms: `Your Loop Messenger verification code is: ${code}. Valid for 10 minutes. Do not share this code.`,
         type: "plain",
         channel: "dnd",

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import loopLogo from "@assets/IMG_3832_1779368920403.jpeg";
+import loopLogo from "@assets/IMG_3832_1779603911915.jpeg";
 
 interface SplashProps {
   onDone: () => void;

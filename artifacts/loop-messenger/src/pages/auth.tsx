@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { useToast } from "@/hooks/use-toast";
 import { RaldFrame } from "@/components/rald-box";
 import { HeartbeatButton } from "@/components/heartbeat-button";
-import loopLogo from "@assets/IMG_3832_1779368920403.jpeg";
+import loopLogo from "@assets/IMG_3832_1779603911915.jpeg";
 
 type RaldState = "idle" | "typing" | "success" | "error";
 
