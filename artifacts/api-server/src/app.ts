@@ -105,7 +105,7 @@ app.use(
     store: new PgSession({
       pool,
       tableName: "user_sessions",
-      createTableIfMissing: true,
+      createTableIfMissing: false,
     }),
     secret: process.env.SESSION_SECRET || "loop-messenger-secret-key-change-in-prod",
     resave: false,
@@ -125,6 +125,7 @@ app.use("/api", router);
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   logger.error({ err }, "Unhandled error");
+  if (res.headersSent) return;
   res.status(500).json({ error: "Internal server error" });
 });
 

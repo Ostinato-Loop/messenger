@@ -116,11 +116,9 @@ router.post("/send-otp", async (req: Request, res: Response) => {
 
   if (!smsResult.ok) {
     logger.warn({ errMsg: smsResult.error }, "TERMII OTP delivery failed");
-    // Roll back so the user can retry immediately
-    await db.delete(otpRequestsTable).where(eq(otpRequestsTable.id, inserted.id));
 
     if (process.env.NODE_ENV !== "production") {
-      // Dev: surface the code in-response — no credentials needed for local testing
+      // Dev: keep OTP in DB so devOtp can still be verified
       return void res.json({
         message: "OTP sent (dev mode — TERMII skipped)",
         cooldownSeconds: 600,
@@ -128,6 +126,8 @@ router.post("/send-otp", async (req: Request, res: Response) => {
       });
     }
 
+    // Production: roll back so user can retry immediately
+    await db.delete(otpRequestsTable).where(eq(otpRequestsTable.id, inserted.id));
     return void res.status(502).json({
       error: "SMS delivery failed. Please try again.",
     });
