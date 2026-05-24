@@ -100,6 +100,12 @@ app.use("/api/auth/send-otp", authLimiter);
 app.use("/api/auth/verify-otp", authLimiter);
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (process.env.NODE_ENV === "production" && !SESSION_SECRET) {
+  logger.error("SESSION_SECRET env var is required in production — refusing to start");
+  process.exit(1);
+}
+
 app.use(
   session({
     store: new PgSession({
@@ -107,7 +113,7 @@ app.use(
       tableName: "user_sessions",
       createTableIfMissing: false,
     }),
-    secret: process.env.SESSION_SECRET || "loop-messenger-secret-key-change-in-prod",
+    secret: SESSION_SECRET || "loop-messenger-dev-secret-do-not-use-in-prod",
     resave: false,
     saveUninitialized: false,
     cookie: {
