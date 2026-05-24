@@ -6,9 +6,13 @@ import { z } from "zod";
 import { logger } from "../lib/logger";
 import { sendTermiiOtp } from "../lib/termii";
 
-const router = Router();
+declare module "express-session" {
+  interface SessionData {
+    userId?: number;
+  }
+}
 
-type SessionData = Record<string, unknown>;
+const router = Router();
 
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -163,7 +167,7 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
   }
 
   const u = user[0];
-  (req.session as SessionData).userId = u.id;
+  req.session.userId = u.id;
 
   return void res.json({
     user: {
@@ -182,7 +186,7 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
 
 // GET /auth/me
 router.get("/me", async (req: Request, res: Response) => {
-  const userId = (req.session as SessionData).userId;
+  const userId = req.session.userId;
   if (!userId) {
     return void res.status(401).json({ error: "Unauthorized" });
   }
@@ -190,7 +194,7 @@ router.get("/me", async (req: Request, res: Response) => {
   const user = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.id, userId as number))
+    .where(eq(usersTable.id, userId))
     .limit(1);
 
   if (user.length === 0) {
@@ -212,12 +216,12 @@ router.get("/me", async (req: Request, res: Response) => {
 
 // POST /auth/logout
 router.post("/logout", async (req: Request, res: Response) => {
-  const userId = (req.session as SessionData).userId;
+  const userId = req.session.userId;
   if (userId) {
     await db
       .update(usersTable)
       .set({ isOnline: false, lastSeen: new Date() })
-      .where(eq(usersTable.id, userId as number));
+      .where(eq(usersTable.id, userId));
   }
   req.session.destroy(() => {});
   return void res.json({ ok: true });
@@ -225,7 +229,7 @@ router.post("/logout", async (req: Request, res: Response) => {
 
 // PATCH /auth/profile
 router.patch("/profile", async (req: Request, res: Response) => {
-  const userId = (req.session as SessionData).userId;
+  const userId = req.session.userId;
   if (!userId) {
     return void res.status(401).json({ error: "Unauthorized" });
   }
@@ -243,7 +247,7 @@ router.patch("/profile", async (req: Request, res: Response) => {
   const updated = await db
     .update(usersTable)
     .set(parsed.data)
-    .where(eq(usersTable.id, userId as number))
+    .where(eq(usersTable.id, userId))
     .returning();
 
   const u = updated[0];
