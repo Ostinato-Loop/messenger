@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown, Search } from "lucide-react";
 import { useSendOtp, useVerifyOtp, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -14,11 +15,148 @@ import { useToast } from "@/hooks/use-toast";
 import { RaldFrame } from "@/components/rald-box";
 import { HeartbeatButton } from "@/components/heartbeat-button";
 import loopLogo from "@assets/IMG_3832_1779603911915.jpeg";
+import { cn } from "@/lib/utils";
 
 type RaldState = "idle" | "typing" | "success" | "error";
 
+type Country = { code: string; flag: string; name: string; dial: string };
+
+const COUNTRIES: Country[] = [
+  { code: "NG", flag: "🇳🇬", name: "Nigeria",           dial: "+234" },
+  { code: "KE", flag: "🇰🇪", name: "Kenya",             dial: "+254" },
+  { code: "GH", flag: "🇬🇭", name: "Ghana",             dial: "+233" },
+  { code: "ZA", flag: "🇿🇦", name: "South Africa",      dial: "+27"  },
+  { code: "ET", flag: "🇪🇹", name: "Ethiopia",          dial: "+251" },
+  { code: "TZ", flag: "🇹🇿", name: "Tanzania",          dial: "+255" },
+  { code: "UG", flag: "🇺🇬", name: "Uganda",            dial: "+256" },
+  { code: "RW", flag: "🇷🇼", name: "Rwanda",            dial: "+250" },
+  { code: "SN", flag: "🇸🇳", name: "Senegal",           dial: "+221" },
+  { code: "CI", flag: "🇨🇮", name: "Côte d'Ivoire",     dial: "+225" },
+  { code: "CM", flag: "🇨🇲", name: "Cameroon",          dial: "+237" },
+  { code: "EG", flag: "🇪🇬", name: "Egypt",             dial: "+20"  },
+  { code: "MA", flag: "🇲🇦", name: "Morocco",           dial: "+212" },
+  { code: "TN", flag: "🇹🇳", name: "Tunisia",           dial: "+216" },
+  { code: "ZW", flag: "🇿🇼", name: "Zimbabwe",          dial: "+263" },
+  { code: "ZM", flag: "🇿🇲", name: "Zambia",            dial: "+260" },
+  { code: "AO", flag: "🇦🇴", name: "Angola",            dial: "+244" },
+  { code: "MZ", flag: "🇲🇿", name: "Mozambique",        dial: "+258" },
+  { code: "MG", flag: "🇲🇬", name: "Madagascar",        dial: "+261" },
+  { code: "CD", flag: "🇨🇩", name: "DR Congo",          dial: "+243" },
+  { code: "BW", flag: "🇧🇼", name: "Botswana",          dial: "+267" },
+  { code: "NA", flag: "🇳🇦", name: "Namibia",           dial: "+264" },
+  { code: "SS", flag: "🇸🇸", name: "South Sudan",       dial: "+211" },
+  { code: "SO", flag: "🇸🇴", name: "Somalia",           dial: "+252" },
+  { code: "ML", flag: "🇲🇱", name: "Mali",              dial: "+223" },
+  { code: "BF", flag: "🇧🇫", name: "Burkina Faso",      dial: "+226" },
+  { code: "NE", flag: "🇳🇪", name: "Niger",             dial: "+227" },
+  { code: "TD", flag: "🇹🇩", name: "Chad",              dial: "+235" },
+  { code: "GM", flag: "🇬🇲", name: "Gambia",            dial: "+220" },
+  { code: "SL", flag: "🇸🇱", name: "Sierra Leone",      dial: "+232" },
+  { code: "LR", flag: "🇱🇷", name: "Liberia",           dial: "+231" },
+  { code: "MU", flag: "🇲🇺", name: "Mauritius",         dial: "+230" },
+  { code: "GB", flag: "🇬🇧", name: "United Kingdom",    dial: "+44"  },
+  { code: "US", flag: "🇺🇸", name: "United States",     dial: "+1"   },
+];
+
+function CountryPicker({
+  selected, onSelect, raldState,
+}: {
+  selected: Country;
+  onSelect: (c: Country) => void;
+  raldState: RaldState;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fn = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
+
+  const filtered = COUNTRIES.filter(
+    (c) =>
+      c.name.toLowerCase().includes(query.toLowerCase()) ||
+      c.dial.includes(query) ||
+      c.code.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  const borderColor =
+    raldState === "typing"  ? "#F59E0B" :
+    raldState === "success" ? "#22C55E" :
+    raldState === "error"   ? "#EF4444" :
+    "hsl(var(--border))";
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => { setOpen((o) => !o); setQuery(""); }}
+        className="flex h-11 items-center gap-1.5 rounded-xl border px-3 font-mono text-sm transition-all select-none"
+        style={{
+          background: "hsl(var(--input) / 0.5)",
+          borderColor,
+        }}
+      >
+        <span className="text-base leading-none">{selected.flag}</span>
+        <span className="font-semibold">{selected.dial}</span>
+        <ChevronDown
+          className={cn("h-3 w-3 text-muted-foreground transition-transform", open && "rotate-180")}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.97 }}
+            transition={{ duration: 0.14 }}
+            className="absolute left-0 top-full z-50 mt-1.5 w-72 overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+          >
+            <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search country or code…"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
+              />
+            </div>
+            <ul className="max-h-52 overflow-y-auto">
+              {filtered.map((c) => (
+                <li key={c.code}>
+                  <button
+                    type="button"
+                    onClick={() => { onSelect(c); setOpen(false); }}
+                    className={cn(
+                      "flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent/50",
+                      selected.code === c.code && "bg-primary/10 text-primary",
+                    )}
+                  >
+                    <span className="text-base">{c.flag}</span>
+                    <span className="flex-1">{c.name}</span>
+                    <span className="font-mono text-xs text-muted-foreground">{c.dial}</span>
+                  </button>
+                </li>
+              ))}
+              {filtered.length === 0 && (
+                <li className="px-3 py-4 text-center text-sm text-muted-foreground">No results</li>
+              )}
+            </ul>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 const phoneSchema = z.object({
-  phone: z.string().min(8, "Enter a valid phone number").max(15),
+  phone: z.string().min(5, "Enter a valid phone number").max(15),
 });
 
 const otpSchema = z.object({
@@ -31,6 +169,7 @@ export default function AuthPage() {
   const queryClient = useQueryClient();
 
   const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [country, setCountry] = useState<Country>(COUNTRIES[0]);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const [raldState, setRaldState] = useState<RaldState>("idle");
@@ -48,7 +187,6 @@ export default function AuthPage() {
     defaultValues: { code: "" },
   });
 
-  // Cooldown countdown
   useEffect(() => {
     if (cooldown > 0) {
       const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
@@ -57,7 +195,6 @@ export default function AuthPage() {
     return undefined;
   }, [cooldown]);
 
-  // Watch phone input → amber when typing
   const watchedPhone = phoneForm.watch("phone");
   useEffect(() => {
     if (step === "phone") {
@@ -66,7 +203,6 @@ export default function AuthPage() {
     }
   }, [watchedPhone, step, sendOtp.isSuccess]);
 
-  // Watch OTP input → amber when typing
   const watchedOtp = otpForm.watch("code");
   useEffect(() => {
     if (step === "otp") {
@@ -75,10 +211,17 @@ export default function AuthPage() {
     }
   }, [watchedOtp, step, verifyOtp.isSuccess, verifyOtp.isError]);
 
+  const buildE164 = useCallback(
+    (local: string) => {
+      const digits = local.replace(/\D/g, "");
+      const stripped = digits.replace(/^0+/, "");
+      return `${country.dial}${stripped}`;
+    },
+    [country],
+  );
+
   const onPhoneSubmit = (values: z.infer<typeof phoneSchema>) => {
-    let phone = values.phone;
-    if (phone.startsWith("0") && phone.length <= 11) phone = "+234" + phone.slice(1);
-    else if (!phone.startsWith("+")) phone = "+234" + phone;
+    const phone = buildE164(values.phone);
     setPhoneNumber(phone);
 
     sendOtp.mutate(
@@ -140,11 +283,9 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Background radial glows */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Scan line */}
       <motion.div
         className="absolute left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/20 to-transparent pointer-events-none"
         initial={{ top: "0%" }}
@@ -158,7 +299,6 @@ export default function AuthPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-sm z-10 space-y-6"
       >
-        {/* Logo */}
         <motion.div
           className="flex flex-col items-center space-y-3"
           initial={{ scale: 0.9, opacity: 0 }}
@@ -174,7 +314,6 @@ export default function AuthPage() {
           </div>
         </motion.div>
 
-        {/* Card with RALD frame */}
         <RaldFrame state={raldState}>
           <div className="bg-card/60 backdrop-blur-xl border border-border rounded-3xl p-6 shadow-2xl">
             <AnimatePresence mode="wait">
@@ -200,18 +339,11 @@ export default function AuthPage() {
                           <FormItem>
                             <Label className="text-xs text-muted-foreground">Phone Number</Label>
                             <div className="flex gap-2">
-                              <div
-                                className="flex items-center justify-center border rounded-xl px-3 font-mono text-sm select-none transition-colors"
-                                style={{
-                                  background: "hsl(var(--input) / 0.5)",
-                                  borderColor: raldState === "typing" ? "#F59E0B"
-                                             : raldState === "success" ? "#22C55E"
-                                             : raldState === "error"   ? "#EF4444"
-                                             : "hsl(var(--border))",
-                                }}
-                              >
-                                <span className="mr-1">🇳🇬</span> +234
-                              </div>
+                              <CountryPicker
+                                selected={country}
+                                onSelect={setCountry}
+                                raldState={raldState}
+                              />
                               <FormControl>
                                 <Input
                                   placeholder="801 234 5678"
@@ -330,7 +462,6 @@ export default function AuthPage() {
           </div>
         </RaldFrame>
 
-        {/* Terms link */}
         <p className="text-center text-[10px] text-muted-foreground/60 px-4">
           By continuing, you agree to our{" "}
           <button
