@@ -19,6 +19,7 @@ const ChatsPage       = lazy(() => import("@/pages/chats"));
 const ProfilePage     = lazy(() => import("@/pages/profile"));
 const SettingsPage    = lazy(() => import("@/pages/settings"));
 const TermsPage       = lazy(() => import("@/pages/terms"));
+const AdminPage       = lazy(() => import("@/pages/admin"));
 const NotFound        = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -66,6 +67,7 @@ function AppRoutes() {
           <Route path="/profile"               component={ProfilePage} />
           <Route path="/settings"              component={SettingsPage} />
           <Route path="/terms"                 component={TermsPage} />
+          <Route path="/admin"                 component={AdminPage} />
           <Route                               component={NotFound} />
         </Switch>
       </Suspense>

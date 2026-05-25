@@ -1,16 +1,32 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useLogout, useGetMe } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, LogOut, Bell, Shield, Info, ChevronRight } from "lucide-react";
+import { ArrowLeft, LogOut, Bell, Shield, Info, ChevronRight, LayoutDashboard } from "lucide-react";
+
+const API_BASE = (import.meta.env.VITE_API_URL as string) ?? "";
+
+async function checkAdmin(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/config`, { credentials: "include" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export default function SettingsPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { data: me } = useGetMe();
   const logout = useLogout();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    checkAdmin().then(setIsAdmin);
+  }, []);
 
   const handleLogout = () => {
     logout.mutate(undefined, {
@@ -74,6 +90,26 @@ export default function SettingsPage() {
               ))}
             </div>
           </div>
+
+          {/* Admin Console — only shown to admin users */}
+          {isAdmin && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2 pb-1">Admin</p>
+              <button
+                type="button"
+                onClick={() => setLocation("/admin")}
+                className="w-full p-4 bg-primary/5 border border-primary/20 rounded-2xl flex items-center gap-4 hover:bg-primary/10 transition-colors text-left"
+                data-testid="button-admin-console"
+              >
+                <LayoutDashboard className="w-5 h-5 text-primary" />
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-primary">RALD Admin Console</span>
+                  <p className="text-xs text-muted-foreground">Users, OTP, sessions, config</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-primary/60" />
+              </button>
+            </div>
+          )}
 
           {/* App info */}
           <div className="bg-muted/10 rounded-2xl border border-border p-4 space-y-1 text-xs text-muted-foreground">
