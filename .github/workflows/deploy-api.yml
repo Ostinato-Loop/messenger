@@ -3,12 +3,6 @@ name: Deploy — Cloudflare Worker API Gateway
 on:
   push:
     branches: [main]
-    paths:
-      - 'workers/loop-messenger-api/**'
-      - 'artifacts/api-server/**'
-      - 'lib/db/**'
-      - 'lib/api-spec/**'
-      - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 
 concurrency:

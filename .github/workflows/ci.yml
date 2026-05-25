@@ -64,7 +64,7 @@ jobs:
           NODE_ENV: production
           VITE_API_URL: ${{ vars.VITE_API_URL || '' }}
           VITE_SUPABASE_URL: "https://onxdcikfttdmnhofsuwo.supabase.co"
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: pnpm --filter @workspace/loop-messenger run build
 
       - name: Upload frontend artifact

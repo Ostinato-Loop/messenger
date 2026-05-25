@@ -76,7 +76,7 @@ async function handleSmsHook(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       to: phone,
-      from: "N-Alert",
+      from: env.TERMII_SENDER_ID ?? "Ostloop",
       sms: body.message,
       type: "plain",
       channel: "dnd",

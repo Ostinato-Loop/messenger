@@ -14,7 +14,7 @@ export async function sendTermiiOtp(
     return { ok: false, error: "SMS service not configured" };
   }
 
-  const senderId = process.env.TERMII_SENDER_ID ?? "N-Alert";
+  const senderId = process.env.TERMII_SENDER_ID ?? "Ostloop";
   const channel = process.env.TERMII_CHANNEL ?? "dnd";
 
   let response: globalThis.Response;

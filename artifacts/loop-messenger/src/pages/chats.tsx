@@ -29,7 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Badge } from "@/components/ui/badge";
-import { Send, Plus, Search, MessageSquare, Phone, X, Check, Edit2, Trash2, Users, Mic } from "lucide-react";
+import { Send, Plus, Search, MessageSquare, Phone, Video, X, Check, Edit2, Trash2, Users, Mic, Settings } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import loopLogo from "@assets/IMG_3832_1779368920403.jpeg";
 import { VoiceNoteRecorder, AudioMessage } from "@/components/voice-note-recorder";
@@ -69,6 +69,7 @@ export default function ChatsPage() {
   });
 
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+  const [convSearch, setConvSearch] = useState("");
 
   // ── Direct chat search ────────────────────────────────────────────────────
   const [directSearch, setDirectSearch] = useState("");
@@ -144,35 +145,47 @@ export default function ChatsPage() {
         }`}
       >
         {/* Header */}
-        <div className="p-4 flex items-center justify-between border-b border-border">
-          <div
-            className="flex items-center gap-3 cursor-pointer"
-            onClick={() => setLocation("/profile")}
-          >
-            <Avatar className="w-10 h-10 border border-primary/20">
-              <AvatarImage src={me?.avatar || ""} />
-              <AvatarFallback className="bg-muted text-primary">
-                {me?.displayName?.substring(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h2 className="font-semibold">{me?.displayName}</h2>
-              <p className="text-xs text-primary">
-                {stats?.totalUnread ? `${stats.totalUnread} unread` : "All caught up"}
-              </p>
+        <div className="px-4 pt-4 pb-3 border-b border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <div
+              className="flex items-center gap-3 cursor-pointer"
+              onClick={() => setLocation("/profile")}
+            >
+              <Avatar className="w-9 h-9 border border-primary/20">
+                <AvatarImage src={me?.avatar || ""} />
+                <AvatarFallback className="bg-muted text-primary text-xs">
+                  {me?.displayName?.substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h2 className="font-semibold text-sm leading-tight">{me?.displayName}</h2>
+                <p className="text-[11px] text-primary leading-tight">
+                  {stats?.totalUnread ? `${stats.totalUnread} unread` : "All caught up ✓"}
+                </p>
+              </div>
             </div>
-          </div>
 
-          <Dialog open={isNewChatOpen} onOpenChange={setIsNewChatOpen}>
-            <DialogTrigger asChild>
+            <div className="flex items-center gap-1">
               <Button
                 size="icon"
                 variant="ghost"
-                className="rounded-full text-primary hover:text-primary hover:bg-primary/10"
+                className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 w-8 h-8"
+                onClick={() => setLocation("/settings")}
+                title="Settings"
               >
-                <Plus className="w-5 h-5" />
+                <Settings className="w-4 h-4" />
               </Button>
-            </DialogTrigger>
+              <Dialog open={isNewChatOpen} onOpenChange={setIsNewChatOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="rounded-full text-primary hover:text-primary hover:bg-primary/10 w-8 h-8"
+                    title="New conversation"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </DialogTrigger>
             <DialogContent className="bg-card border-border sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>New Conversation</DialogTitle>
@@ -327,7 +340,20 @@ export default function ChatsPage() {
                 </TabsContent>
               </Tabs>
             </DialogContent>
-          </Dialog>
+              </Dialog>
+            </div>
+          </div>
+
+          {/* Conversation search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              value={convSearch}
+              onChange={(e) => setConvSearch(e.target.value)}
+              placeholder="Search conversations…"
+              className="w-full h-9 pl-9 pr-3 bg-muted/40 border border-border rounded-full text-sm outline-none focus:border-primary/50 focus:ring-0 transition-colors placeholder:text-muted-foreground/50"
+            />
+          </div>
         </div>
 
         {/* Conversation list */}
@@ -346,7 +372,14 @@ export default function ChatsPage() {
             </div>
           ) : conversations?.length ? (
             <div className="p-2 space-y-1">
-              {conversations.map((conv) => {
+              {conversations.filter((conv) => {
+                if (!convSearch.trim()) return true;
+                const q = convSearch.toLowerCase();
+                const other = conv.members.find((m: any) => m.userId !== me?.id)?.user;
+                const name = (conv.name || other?.displayName || "").toLowerCase();
+                const last = (conv.lastMessage?.content || "").toLowerCase();
+                return name.includes(q) || last.includes(q);
+              }).map((conv) => {
                 const otherMember = conv.members.find((m) => m.userId !== me?.id)?.user;
                 const name = conv.name || otherMember?.displayName || "Unknown";
                 const avatar = conv.avatar || otherMember?.avatar;
@@ -589,22 +622,42 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
           </div>
         </div>
         {!isGroup && otherMember && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              startCall({
-                conversationId,
-                respondentId: otherMember.id,
-                peerName: otherMember.displayName,
-                peerAvatar: otherMember.avatar ?? undefined,
-                type: "voice",
-              })
-            }
-            title="Start voice call"
-          >
-            <Phone className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+              onClick={() =>
+                startCall({
+                  conversationId,
+                  respondentId: otherMember.id,
+                  peerName: otherMember.displayName,
+                  peerAvatar: otherMember.avatar ?? undefined,
+                  type: "voice",
+                })
+              }
+              title="Voice call"
+            >
+              <Phone className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+              onClick={() =>
+                startCall({
+                  conversationId,
+                  respondentId: otherMember.id,
+                  peerName: otherMember.displayName,
+                  peerAvatar: otherMember.avatar ?? undefined,
+                  type: "video",
+                })
+              }
+              title="Video call"
+            >
+              <Video className="w-5 h-5" />
+            </Button>
+          </div>
         )}
       </div>
 
