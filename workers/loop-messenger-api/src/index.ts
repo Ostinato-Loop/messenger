@@ -6,8 +6,8 @@ export interface Env {
 }
 
 const ALWAYS_ALLOWED = [
+  "https://messenger.rald.cloud",
   "https://loop-messenger.pages.dev",
-  "https://messenger.ostloop.name.ng",
 ];
 
 function resolveCorsOrigin(origin: string | null, env: Env): string {
@@ -16,8 +16,7 @@ function resolveCorsOrigin(origin: string | null, env: Env): string {
   const all = [...ALWAYS_ALLOWED, ...extras];
   const ok =
     all.includes(origin) ||
-    origin.endsWith(".replit.dev") ||
-    origin.endsWith(".replit.app") ||
+    /^https:\/\/[\w-]+\.rald\.cloud$/.test(origin) ||
     origin.endsWith(".pages.dev") ||
     origin === "http://localhost:3000" ||
     origin === "http://localhost:5173";
@@ -149,9 +148,9 @@ export default {
 
     if (url.pathname === "/health" || url.pathname === "/api/healthz") {
       return jsonResponse(
-        { status: "ok", worker: "loop-messenger-api", ts: Date.now() },
+        { status: "ok", worker: "loop-messenger-api", domain: "messenger.rald.cloud", ts: Date.now() },
         200,
-        cors
+        cors,
       );
     }
 
