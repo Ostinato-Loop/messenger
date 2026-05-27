@@ -1,46 +1,65 @@
-import { useId } from "react";
+/**
+ * Loop Messenger brand mark
+ * Loop Messenger is an independent product — its identity is separate from RALD.
+ * This file previously held the RALD logo in error. It now holds the Loop Messenger mark.
+ * Brand color: #FF7A00 (vibrant orange)
+ */
 
-interface RaldLogoProps {
-  height?: number;
-  theme?: "dark" | "light";
-  accentColor?: string;
+interface MessengerIconProps {
+  size?: number;
+  color?: string;
   className?: string;
 }
 
-export function RaldLogo({ height = 32, theme = "dark", accentColor, className = "" }: RaldLogoProps) {
-  const uid = useId().replace(/:/g, "");
-  const mainColor = theme === "dark" ? "#FFFFFF" : "#1C3557";
-  const teal  = "#00C87A";
-  const red   = "#D42B2B";
-  const amber = "#E8A200";
-
-  const fs  = height;
-  const vbH = height;
-  const vbW = Math.round(height * 3.15);
-  const y   = Math.round(height * 0.82);
-  const aX  = Math.round(height * 0.87);
-  const aW  = Math.round(height * 0.73);
-  const midY = Math.round(height * 0.48);
-
-  const shadow = accentColor
-    ? { filter: `drop-shadow(0 0 ${Math.round(height * 0.35)}px ${accentColor}55)` }
-    : {};
-
-  const font = "'Inter', 'Helvetica Neue', Arial, sans-serif";
-  const fp = { fontSize: fs, fontWeight: 900 as const, fontFamily: font, letterSpacing: "-0.03em" };
-
+/** The Loop Messenger "L" mark — square aspect ratio */
+export function MessengerIcon({ size = 36, color = "#FF7A00", className = "" }: MessengerIconProps) {
   return (
-    <svg width={vbW} height={vbH} viewBox={`0 0 ${vbW} ${vbH}`} className={className} style={shadow} aria-label="RALD" role="img">
-      <defs>
-        <clipPath id={`${uid}au`}><rect x={aX} y={0} width={aW} height={midY} /></clipPath>
-        <clipPath id={`${uid}al`}><rect x={aX} y={midY} width={Math.round(aW * 0.5)} height={vbH - midY} /></clipPath>
-        <clipPath id={`${uid}ar`}><rect x={aX + Math.round(aW * 0.5)} y={midY} width={Math.round(aW * 0.5)} height={vbH - midY} /></clipPath>
-      </defs>
-      <text x={0} y={y} {...fp} fill={mainColor}>R</text>
-      <text x={aX} y={y} {...fp} fill={teal}  clipPath={`url(#${uid}au)`}>A</text>
-      <text x={aX} y={y} {...fp} fill={red}   clipPath={`url(#${uid}al)`}>A</text>
-      <text x={aX} y={y} {...fp} fill={amber} clipPath={`url(#${uid}ar)`}>A</text>
-      <text x={aX + aW} y={y} {...fp} fill={mainColor}>LD</text>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 44 44"
+      fill="none"
+      className={className}
+      aria-label="Loop Messenger"
+      role="img"
+    >
+      <path d="M12 8h4v24h16v4H12V8z" fill={color} opacity="0.95" />
+      <path d="M18 14h4v12h10v4H18V14z" fill={color} opacity="0.45" />
     </svg>
   );
 }
+
+/** Loop Messenger wordmark */
+export function MessengerLogo({ size = 36, color = "#FF7A00", className = "" }: MessengerIconProps) {
+  const w = Math.round(size * 4.2);
+  return (
+    <svg
+      width={w}
+      height={size}
+      viewBox={`0 0 ${w} ${size}`}
+      fill="none"
+      className={className}
+      aria-label="Loop Messenger"
+      role="img"
+    >
+      <g transform={`scale(${size / 44})`}>
+        <path d="M12 8h4v24h16v4H12V8z" fill={color} opacity="0.95" />
+        <path d="M18 14h4v12h10v4H18V14z" fill={color} opacity="0.45" />
+      </g>
+      <text
+        x={size + Math.round(size * 0.25)}
+        y={Math.round(size * 0.74)}
+        fontFamily="'Inter','Helvetica Neue',Arial,sans-serif"
+        fontWeight="700"
+        fontSize={Math.round(size * 0.70)}
+        fill={color}
+        letterSpacing="-0.02em"
+      >
+        Messenger
+      </text>
+    </svg>
+  );
+}
+
+/** @deprecated RALD logo was incorrectly placed in Loop Messenger. Use MessengerLogo or MessengerIcon. */
+export const RaldLogo = MessengerLogo;
