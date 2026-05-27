@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import loopLogo from "@assets/IMG_3832_1779603911915.jpeg";
+import { RaldLogo } from "@/components/rald-logo";
 
 interface SplashProps {
   onDone: () => void;
@@ -62,13 +62,8 @@ export function SplashScreen({ onDone }: SplashProps) {
             />
 
             {/* Logo box */}
-            <div className="w-28 h-28 rounded-[28px] overflow-hidden border border-orange-500/30 shadow-[0_0_40px_rgba(255,107,0,0.35)]">
-              <img
-                src={loopLogo}
-                alt="Loop Messenger"
-                className="w-full h-full object-cover"
-                loading="eager"
-              />
+            <div className="w-28 h-28 rounded-[28px] flex items-center justify-center bg-[#0F1416] border border-orange-500/30 shadow-[0_0_40px_rgba(255,107,0,0.35)] p-4">
+              <RaldLogo height={52} theme="dark" accentColor="#FF7A00" />
             </div>
           </motion.div>
 
@@ -83,7 +78,7 @@ export function SplashScreen({ onDone }: SplashProps) {
               Loop Messenger
             </h1>
             <p className="text-xs tracking-[0.25em] uppercase text-orange-400/70 font-medium">
-              by Lilcky Studio
+              by RALD
             </p>
           </motion.div>
 
