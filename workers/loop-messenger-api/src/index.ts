@@ -1,163 +1,86 @@
-export interface Env {
-  TERMII_API_KEY?: string;
-  TERMII_SENDER_ID?: string;
-  API_ORIGIN?: string;
-  ALLOWED_ORIGINS?: string;
-}
+// Loop Messenger API — Cloudflare Worker
+// Deployed at: messenger.rald.cloud | Version: 1.0.0
+// Phase G1 — Foundation Implementation
+// LILCKY STUDIO LIMITED
 
-const ALWAYS_ALLOWED = [
-  "https://messenger.rald.cloud",
-  "https://loop-messenger.pages.dev",
-];
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { AppContext, dbMiddleware } from "./lib/middleware";
+import { health } from "./routes/health";
+import { conversations } from "./routes/conversations";
+import { messages } from "./routes/messages";
+import { reactions } from "./routes/reactions";
+import { members } from "./routes/members";
+import { assignments } from "./routes/assignments";
+import { attachments } from "./routes/attachments";
 
-function resolveCorsOrigin(origin: string | null, env: Env): string {
-  if (!origin) return ALWAYS_ALLOWED[0];
-  const extras = (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const all = [...ALWAYS_ALLOWED, ...extras];
-  const ok =
-    all.includes(origin) ||
-    /^https:\/\/[\w-]+\.rald\.cloud$/.test(origin) ||
-    origin.endsWith(".pages.dev") ||
-    origin === "http://localhost:3000" ||
-    origin === "http://localhost:5173";
-  return ok ? origin : ALWAYS_ALLOWED[0];
-}
+const VERSION = "1.0.0";
 
-function corsHeaders(origin: string | null, env: Env): Record<string, string> {
-  return {
-    "Access-Control-Allow-Origin": resolveCorsOrigin(origin, env),
-    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Cookie, X-Requested-With",
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  };
-}
+const app = new Hono<AppContext>();
 
-function jsonResponse(data: unknown, status: number, extra: Record<string, string> = {}): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json", ...extra },
-  });
-}
+// ── CORS ─────────────────────────────────────────────────────────────────────
+app.use("*", cors({
+  origin: [
+    "https://rald.cloud",
+    "https://app.rald.cloud",
+    "https://messenger.rald.cloud",
+    "https://loop.rald.cloud",
+    "https://business.rald.cloud",
+    "https://admin.rald.cloud",
+    "https://control.rald.cloud",
+    "https://loop-messenger.pages.dev",
+    "https://rald-control-center.pages.dev",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost:3001",
+  ],
+  allowHeaders: ["Authorization", "Content-Type", "X-Workspace-ID", "X-Request-ID"],
+  allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  credentials: true,
+}));
 
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("0") && digits.length === 11) return "+234" + digits.slice(1);
-  if (!phone.startsWith("+")) return "+" + digits;
-  return phone;
-}
+// ── Supabase client per request ───────────────────────────────────────────────
+app.use("*", dbMiddleware);
 
-async function handleSmsHook(
-  request: Request,
-  env: Env,
-  cors: Record<string, string>,
-): Promise<Response> {
-  if (!env.TERMII_API_KEY) {
-    return jsonResponse({ error: "SMS service not configured" }, 503, cors);
-  }
+// ── Routes ────────────────────────────────────────────────────────────────────
+app.route("/", health);
+app.route("/", conversations);
+app.route("/", messages);
+app.route("/", reactions);
+app.route("/", members);
+app.route("/", assignments);
+app.route("/", attachments);
 
-  let body: { phone?: string; message?: string };
-  try {
-    body = await request.json<{ phone?: string; message?: string }>();
-  } catch {
-    return jsonResponse({ error: "Invalid JSON body" }, 400, cors);
-  }
+// ── Root ──────────────────────────────────────────────────────────────────────
+app.get("/", (c) =>
+  c.json({
+    service:     "Loop Messenger API",
+    version:     VERSION,
+    phase:       "G1 — Foundation",
+    owner:       "LILCKY STUDIO LIMITED",
+    deployed_at: "messenger.rald.cloud",
+    endpoints: {
+      health:        "GET /health",
+      conversations: "GET|POST /conversations",
+      conversation:  "GET|PATCH|DELETE /conversations/:id",
+      messages:      "GET|POST /conversations/:id/messages",
+      message:       "PATCH|DELETE /conversations/:id/messages/:msgId",
+      status:        "PATCH /conversations/:id/messages/:msgId/status",
+      reactions:     "GET|POST /conversations/:id/messages/:msgId/reactions",
+      reaction:      "DELETE /conversations/:id/messages/:msgId/reactions/:emoji",
+      members:       "GET|POST /conversations/:id/members",
+      member:        "PATCH|DELETE /conversations/:id/members/:userId",
+      assignments:   "GET|POST /conversations/:id/assignments",
+      attachments:   "GET|POST /conversations/:id/attachments",
+    },
+    timestamp: new Date().toISOString(),
+  })
+);
 
-  if (!body.phone || !body.message) {
-    return jsonResponse({ error: "phone and message are required" }, 400, cors);
-  }
+app.notFound((c) => c.json({ error: "Not found", path: c.req.path }, 404));
+app.onError((err, c) => {
+  console.error("[messenger] error:", err.message);
+  return c.json({ error: "Internal server error" }, 500);
+});
 
-  const phone = normalizePhone(body.phone);
-
-  const termiiRes = await fetch("https://v3.api.termii.com/api/sms/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      to: phone,
-      from: env.TERMII_SENDER_ID ?? "Ostloop",
-      sms: body.message,
-      type: "plain",
-      channel: "dnd",
-      api_key: env.TERMII_API_KEY,
-    }),
-  });
-
-  const result = (await termiiRes.json()) as Record<string, unknown>;
-  const termiiOk = !!(result.message_id || result.code === "ok");
-  return new Response(JSON.stringify(result), {
-    status: termiiOk ? 200 : 502,
-    headers: { "Content-Type": "application/json", ...cors },
-  });
-}
-
-async function proxyToApi(
-  request: Request,
-  url: URL,
-  env: Env,
-  cors: Record<string, string>,
-): Promise<Response> {
-  const origin = env.API_ORIGIN?.replace(/\/$/, "") || "";
-  if (!origin) {
-    return jsonResponse({ error: "API origin not configured" }, 503, cors);
-  }
-
-  const target = `${origin}${url.pathname}${url.search}`;
-
-  const proxyHeaders = new Headers(request.headers);
-  proxyHeaders.set("X-Forwarded-For", request.headers.get("CF-Connecting-IP") || "");
-  proxyHeaders.set("X-Real-IP", request.headers.get("CF-Connecting-IP") || "");
-  proxyHeaders.set("X-Forwarded-Proto", "https");
-  proxyHeaders.delete("host");
-
-  const proxyReq = new Request(target, {
-    method: request.method,
-    headers: proxyHeaders,
-    body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
-    redirect: "follow",
-  });
-
-  let res: Response;
-  try {
-    res = await fetch(proxyReq);
-  } catch {
-    return jsonResponse({ error: "Upstream API unavailable. Please try again." }, 503, cors);
-  }
-
-  const resHeaders = new Headers(res.headers);
-  Object.entries(cors).forEach(([k, v]) => resHeaders.set(k, v));
-  resHeaders.set("X-Powered-By", "Loop Messenger / RALD Infra");
-  resHeaders.delete("transfer-encoding");
-
-  return new Response(res.body, {
-    status: res.status,
-    statusText: res.statusText,
-    headers: resHeaders,
-  });
-}
-
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const origin = request.headers.get("Origin");
-    const cors = corsHeaders(origin, env);
-
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: cors });
-    }
-
-    if (url.pathname === "/health" || url.pathname === "/api/healthz") {
-      return jsonResponse(
-        { status: "ok", worker: "loop-messenger-api", domain: "messenger.rald.cloud", ts: Date.now() },
-        200,
-        cors,
-      );
-    }
-
-    if (url.pathname === "/api/sms-hook" && request.method === "POST") {
-      return handleSmsHook(request, env, cors);
-    }
-
-    return proxyToApi(request, url, env, cors);
-  },
-};
+export default app;
