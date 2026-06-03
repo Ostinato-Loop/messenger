@@ -18,7 +18,7 @@ import loopLogo from "@assets/IMG_3832_1779603911915.jpeg";
 import { cn } from "@/lib/utils";
 
 const MESSENGER_TOKEN_KEY = "messenger_rald_token";
-const RALD_AUTH_UI        = "https://accounts.rald.cloud";
+const RALD_AUTH_UI        = (import.meta.env.VITE_RALD_AUTH_URL as string | undefined) ?? "https://profiles.rald.cloud";
 const API_BASE            = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
 
 type RaldState = "idle" | "typing" | "success" | "error";
