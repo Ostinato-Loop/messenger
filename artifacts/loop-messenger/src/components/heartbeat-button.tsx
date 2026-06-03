@@ -31,7 +31,7 @@ export function HeartbeatButton({
     if (disabled || loading) return;
     setClicked(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    onClick();
+    if (onClick) onClick();
   };
 
   // Reset clicked state if loading stops
