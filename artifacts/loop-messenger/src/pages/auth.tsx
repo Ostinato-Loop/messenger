@@ -258,7 +258,7 @@ export default function AuthPage() {
           <img src={loopLogo} alt="RALD" className="w-16 h-16 rounded-2xl object-cover" />
         </div>
 
-        <RaldFrame raldState={raldState} className="p-6 rounded-2xl">
+        <RaldFrame state={raldState} className="p-6 rounded-2xl">
           <h1 className="text-xl font-semibold text-white text-center mb-1">
             {step === "phone" ? "Sign in to Messenger" : "Enter your code"}
           </h1>
