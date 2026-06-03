@@ -1,6 +1,6 @@
 // Loop Messenger API — Cloudflare Worker
-// Deployed at: messenger.rald.cloud | Version: 1.0.0
-// Phase G1 — Foundation Implementation
+// Deployed at: messenger.rald.cloud | Version: 1.1.0
+// Phase G1 — Foundation + G.12 RALD SSO (WS1-F2 / WS3-F1 fix)
 // LILCKY STUDIO LIMITED
 
 import { Hono } from "hono";
@@ -13,12 +13,12 @@ import { reactions } from "./routes/reactions";
 import { members } from "./routes/members";
 import { assignments } from "./routes/assignments";
 import { attachments } from "./routes/attachments";
+import { sso } from "./routes/sso";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 
 const app = new Hono<AppContext>();
 
-// ── CORS ─────────────────────────────────────────────────────────────────────
 app.use("*", cors({
   origin: [
     "https://rald.cloud",
@@ -28,6 +28,7 @@ app.use("*", cors({
     "https://business.rald.cloud",
     "https://admin.rald.cloud",
     "https://control.rald.cloud",
+    "https://profiles.rald.cloud",
     "https://loop-messenger.pages.dev",
     "https://rald-control-center.pages.dev",
     "http://localhost:5173",
@@ -39,10 +40,12 @@ app.use("*", cors({
   credentials: true,
 }));
 
-// ── Supabase client per request ───────────────────────────────────────────────
 app.use("*", dbMiddleware);
 
-// ── Routes ────────────────────────────────────────────────────────────────────
+// ── SSO (no auth middleware — public endpoint for token validation) ───────────
+app.route("/", sso);
+
+// ── Authenticated routes ──────────────────────────────────────────────────────
 app.route("/", health);
 app.route("/", conversations);
 app.route("/", messages);
@@ -51,15 +54,15 @@ app.route("/", members);
 app.route("/", assignments);
 app.route("/", attachments);
 
-// ── Root ──────────────────────────────────────────────────────────────────────
 app.get("/", (c) =>
   c.json({
     service:     "Loop Messenger API",
     version:     VERSION,
-    phase:       "G1 — Foundation",
+    phase:       "G1 + G.12 SSO",
     owner:       "LILCKY STUDIO LIMITED",
     deployed_at: "messenger.rald.cloud",
     endpoints: {
+      sso:           "POST /auth/rald-sso",
       health:        "GET /health",
       conversations: "GET|POST /conversations",
       conversation:  "GET|PATCH|DELETE /conversations/:id",
