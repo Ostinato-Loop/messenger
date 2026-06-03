@@ -1,15 +1,14 @@
 // Loop Messenger API — RALD SSO Route
 // POST /auth/rald-sso  { rald_token }
-// Validates the inbound RALD token via POST auth.rald.cloud/sso/verify
-// (server-to-server, no authMiddleware on the auth server side).
-// Creates/finds the Messenger user record and confirms the token is
-// usable for all subsequent API calls as a Bearer token.
+// Verifies the RALD JWT locally using RALD_JWT_SECRET (shared with rald-auth-core).
+// NO outbound HTTP call — avoids CF Error 522 (Workers cannot call other
+// CF-proxied Workers via public hostname).
+// Creates/finds the Messenger user record and confirms the token is usable.
 // LILCKY STUDIO LIMITED
 
 import { Hono } from "hono";
 import { AppContext } from "../lib/middleware";
-
-const RALD_AUTH_DEFAULT = "https://auth.rald.cloud";
+import { verifyJwt } from "../lib/auth";
 
 export const sso = new Hono<AppContext>();
 
@@ -19,44 +18,21 @@ sso.post("/auth/rald-sso", async (c) => {
     return c.json({ error: "rald_token is required" }, 400);
   }
 
-  const raldAuthUrl = (c.env.RALD_AUTH_URL as string | undefined) ?? RALD_AUTH_DEFAULT;
-
-  // Validate via POST /sso/verify — no authMiddleware, pure JWT verification
-  let verifyRes: Response;
-  try {
-    verifyRes = await fetch(`${raldAuthUrl}/sso/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: body.rald_token }),
-    });
-  } catch (err) {
-    console.error("[messenger-sso] sso/verify fetch error:", err);
-    return c.json({ error: "Auth service unreachable" }, 502);
-  }
-
-  if (!verifyRes.ok) {
+  // Verify RALD JWT locally — no HTTP call (avoids CF 522 error)
+  const raldPayload = await verifyJwt(body.rald_token, c.env.RALD_JWT_SECRET);
+  if (!raldPayload) {
     return c.json({ error: "Invalid or expired RALD token" }, 401);
   }
 
-  const verifyData = await verifyRes.json() as {
-    valid: boolean;
-    user?: {
-      id: string;
-      email?: string;
-      phone?: string;
-      name?: string | null;
-      role?: string;
-    };
+  const raldUser = {
+    id:    raldPayload.id,
+    email: raldPayload.email ?? undefined,
+    phone: undefined as string | undefined,
+    role:  raldPayload.role ?? "user",
   };
 
-  if (!verifyData.valid || !verifyData.user) {
-    return c.json({ error: "Invalid or expired RALD token" }, 401);
-  }
-
-  const raldUser = verifyData.user;
   const db = c.get("db");
 
-  // Upsert user in Messenger's Supabase user table
   const phone = raldUser.phone ?? null;
   const email = raldUser.email ?? null;
 
@@ -76,7 +52,6 @@ sso.post("/auth/rald-sso", async (c) => {
 
   if (existing && existing.length > 0) {
     userId = existing[0].id;
-    // Keep rald_id in sync
     await db
       .from("users")
       .update({ rald_id: raldUser.id, updated_at: new Date().toISOString() })
@@ -88,8 +63,7 @@ sso.post("/auth/rald-sso", async (c) => {
         phone:   phone,
         email:   email,
         rald_id: raldUser.id,
-        name:    raldUser.name ?? null,
-        role:    raldUser.role ?? "user",
+        role:    raldUser.role,
       })
       .select("id")
       .single();
@@ -107,7 +81,7 @@ sso.post("/auth/rald-sso", async (c) => {
       id:    userId,
       phone: phone,
       email: email,
-      role:  raldUser.role ?? "user",
+      role:  raldUser.role,
     },
     message: "RALD token accepted — use it as Bearer for all Messenger API calls",
   });
