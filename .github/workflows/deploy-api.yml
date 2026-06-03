@@ -35,6 +35,32 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --minify
 
+      - name: Push SUPABASE_SERVICE_ROLE_KEY to worker
+        working-directory: workers/loop-messenger-api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "FATAL: SUPABASE_SERVICE_ROLE_KEY is not set in GitHub secrets" && exit 1
+          fi
+          echo "$SUPABASE_SERVICE_ROLE_KEY" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+          echo "SUPABASE_SERVICE_ROLE_KEY pushed to worker"
+
+      - name: Push RALD_JWT_SECRET to worker
+        working-directory: workers/loop-messenger-api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RALD_JWT_SECRET: ${{ secrets.RALD_JWT_SECRET }}
+        run: |
+          if [ -z "$RALD_JWT_SECRET" ]; then
+            echo "FATAL: RALD_JWT_SECRET is not set in GitHub secrets" && exit 1
+          fi
+          echo "$RALD_JWT_SECRET" | npx wrangler secret put RALD_JWT_SECRET
+          echo "RALD_JWT_SECRET pushed to worker"
+
       - name: Push TERMII_API_KEY to worker
         working-directory: workers/loop-messenger-api
         env:
