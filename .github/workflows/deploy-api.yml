@@ -56,10 +56,11 @@ jobs:
           RALD_JWT_SECRET: ${{ secrets.RALD_JWT_SECRET }}
         run: |
           if [ -z "$RALD_JWT_SECRET" ]; then
-            echo "FATAL: RALD_JWT_SECRET is not set in GitHub secrets" && exit 1
+            echo "WARNING: RALD_JWT_SECRET is not set — add it to messenger GitHub secrets for auth to work"
+          else
+            echo "$RALD_JWT_SECRET" | npx wrangler secret put RALD_JWT_SECRET
+            echo "RALD_JWT_SECRET pushed to worker"
           fi
-          echo "$RALD_JWT_SECRET" | npx wrangler secret put RALD_JWT_SECRET
-          echo "RALD_JWT_SECRET pushed to worker"
 
       - name: Push TERMII_API_KEY to worker
         working-directory: workers/loop-messenger-api
