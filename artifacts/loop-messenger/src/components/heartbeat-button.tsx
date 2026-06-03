@@ -2,11 +2,13 @@ import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface HeartbeatButtonProps {
-  onClick: () => void;
+  onClick?: () => void;
   loading?: boolean;
   disabled?: boolean;
   children: React.ReactNode;
   className?: string;
+  type?: "submit" | "button" | "reset";
+  raldState?: string;
   "data-testid"?: string;
 }
 
@@ -18,6 +20,8 @@ export function HeartbeatButton({
   disabled = false,
   children,
   className = "",
+  type = "submit",
+  raldState: _raldState,
   "data-testid": testId,
 }: HeartbeatButtonProps) {
   const [clicked, setClicked] = useState(false);
@@ -42,7 +46,7 @@ export function HeartbeatButton({
 
   return (
     <motion.button
-      type="submit"
+      type={type}
       onClick={handleClick}
       disabled={disabled || loading}
       data-testid={testId}
