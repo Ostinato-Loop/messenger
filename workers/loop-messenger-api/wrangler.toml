@@ -9,6 +9,8 @@ NOTIFY_URL      = "https://notification.rald.cloud"
 SEARCH_URL      = "https://search.rald.cloud"
 CRM_URL         = "https://crm.rald.cloud"
 INBOX_URL       = "https://inbox.rald.cloud"
+RALD_AUTH_URL   = "https://auth.rald.cloud"
+SUPABASE_URL    = "https://onxdcikfttdmnhofsuwo.supabase.co"
 
 [[routes]]
 pattern         = "messenger.rald.cloud/*"
