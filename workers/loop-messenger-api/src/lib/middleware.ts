@@ -42,9 +42,22 @@ export async function authMiddleware(c: Context<AppContext>, next: Next) {
   await next();
 }
 
+/**
+ * workspaceMiddleware — resolves the workspace ID for every authenticated request.
+ *
+ * Priority (highest → lowest):
+ *  1. X-Workspace-ID request header  (business API clients)
+ *  2. workspace_id claim in the RALD JWT  (SSO-issued tokens may carry it)
+ *  3. Fallback: "consumer"  (Loop Messenger P2P — single shared namespace)
+ *
+ * The header is now OPTIONAL so the Loop Messenger frontend can work without
+ * explicitly setting it.  Business integrations that need multi-tenancy still
+ * pass the header as before.
+ */
 export async function workspaceMiddleware(c: Context<AppContext>, next: Next) {
-  const workspaceId = c.req.header("X-Workspace-ID");
-  if (!workspaceId) return c.json({ error: "X-Workspace-ID header required" }, 400);
+  const fromHeader  = c.req.header("X-Workspace-ID");
+  const fromJwt     = (c.get("user") as JwtPayload | undefined)?.workspace_id;
+  const workspaceId = fromHeader ?? fromJwt ?? "consumer";
   c.set("workspaceId", workspaceId);
   await next();
 }
