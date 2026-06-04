@@ -8,7 +8,7 @@ import { writeAudit } from "../lib/audit";
 import { generateId, nowIso } from "../lib/auth";
 
 export const members = new Hono<AppContext>();
-members.use("/conversations*", authMiddleware, workspaceMiddleware);
+members.use("/conversations/*", authMiddleware, workspaceMiddleware);
 
 // ── GET /conversations/:id/members ────────────────────────────────────────
 members.get("/conversations/:id/members", conversationAccessMiddleware, async (c) => {
