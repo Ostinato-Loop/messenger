@@ -13,14 +13,16 @@ import { useIsOffline } from "@/lib/network";
 import { initPushNotifications } from "@/lib/notification.service";
 
 // Lazy-loaded pages — code split for 3G/4G optimization
-const AuthPage        = lazy(() => import("@/pages/auth"));
-const OnboardingPage  = lazy(() => import("@/pages/onboarding"));
-const ChatsPage       = lazy(() => import("@/pages/chats"));
-const ProfilePage     = lazy(() => import("@/pages/profile"));
-const SettingsPage    = lazy(() => import("@/pages/settings"));
-const TermsPage       = lazy(() => import("@/pages/terms"));
-const AdminPage       = lazy(() => import("@/pages/admin"));
-const NotFound        = lazy(() => import("@/pages/not-found"));
+const AuthPage          = lazy(() => import("@/pages/auth"));
+const OnboardingPage    = lazy(() => import("@/pages/onboarding"));
+const ChatsPage         = lazy(() => import("@/pages/chats"));
+const ProfilePage       = lazy(() => import("@/pages/profile"));
+const SettingsPage      = lazy(() => import("@/pages/settings"));
+const TermsPage         = lazy(() => import("@/pages/terms"));
+const AdminPage         = lazy(() => import("@/pages/admin"));
+const CommunitiesPage   = lazy(() => import("@/pages/communities"));
+const CallsPage         = lazy(() => import("@/pages/calls"));
+const NotFound          = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,6 +66,8 @@ function AppRoutes() {
           <Route path="/onboarding"            component={OnboardingPage} />
           <Route path="/chats"                 component={ChatsPage} />
           <Route path="/chats/:conversationId" component={ChatsPage} />
+          <Route path="/communities"           component={CommunitiesPage} />
+          <Route path="/calls"                 component={CallsPage} />
           <Route path="/profile"               component={ProfilePage} />
           <Route path="/settings"              component={SettingsPage} />
           <Route path="/terms"                 component={TermsPage} />
