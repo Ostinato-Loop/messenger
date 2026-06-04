@@ -1,8 +1,11 @@
 /**
  * Loop Messenger — Auth page
- * Phase H: Identity Axiom. Messenger does NOT own authentication.
- * If ?rald_token= in URL: exchange it and enter the app.
- * Otherwise: redirect to profiles.rald.cloud/login.
+ * Phase H / Sprint 01: Identity Axiom. Messenger does NOT own authentication.
+ * Silent SSO cascade:
+ *   Step 1: ?rald_token= in URL → exchange → enter app
+ *   Step 2: Stored token valid  → enter app
+ *   Step 3: rald_session cookie → /auth/silent → enter app
+ *   Step 4: No session          → redirect to profiles.rald.cloud/login
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -70,7 +73,23 @@ export default function AuthPage() {
         } catch { /* network error — fall through */ }
       }
 
-      // ── Step 3: redirect to profiles ──────────────────────────────────────
+      // ── Step 3: silent SSO via shared rald_session cookie (domain=.rald.cloud) ─
+      // The cookie is set by auth.rald.cloud on login and shared across all
+      // *.rald.cloud subdomains. The Messenger Worker validates it locally.
+      try {
+        const silentRes = await fetch(`${API_BASE}/auth/silent`, { credentials: "include" });
+        if (silentRes.ok) {
+          const silent = await silentRes.json() as { valid: boolean; token?: string };
+          if (silent.valid && silent.token) {
+            localStorage.setItem(MESSENGER_TOKEN_KEY, silent.token);
+            queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+            setLocation("/chats");
+            return;
+          }
+        }
+      } catch { /* no cookie session available — fall through to redirect */ }
+
+      // ── Step 4: redirect to profiles ──────────────────────────────────────
       redirectToProfiles();
     };
 

@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Edit2, Save, LogOut, Shield } from "lucide-react";
+import { ArrowLeft, Edit2, Save, LogOut, Shield, ExternalLink, Radio } from "lucide-react";
+import { openProfiles, openLoop } from "@/lib/cross-app";
 
 export default function ProfilePage() {
   const [, setLocation] = useLocation();
@@ -137,6 +138,29 @@ export default function ProfilePage() {
                 <span className="text-sm text-green-400">Online</span>
               </div>
             </div>
+          </div>
+
+          {/* Cross-app navigation — Sprint 01 Priority 4: No dead ends */}
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider px-1">RALD Ecosystem</p>
+            <button
+              type="button"
+              onClick={() => openProfiles()}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-border hover:bg-muted/30 transition-colors text-sm"
+              data-testid="button-view-profiles"
+            >
+              <ExternalLink className="w-4 h-4 text-primary" />
+              View full profile on Profiles
+            </button>
+            <button
+              type="button"
+              onClick={() => openLoop("/discover")}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-border hover:bg-muted/30 transition-colors text-sm"
+              data-testid="button-open-loop"
+            >
+              <Radio className="w-4 h-4 text-primary" />
+              Discover communities on Loop
+            </button>
           </div>
 
           {/* Legal + logout */}
