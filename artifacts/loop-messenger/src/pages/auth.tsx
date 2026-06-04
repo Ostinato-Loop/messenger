@@ -11,8 +11,12 @@ import { getGetMeQueryKey } from "@workspace/api-client-react";
 import loopLogo from "@assets/IMG_3832_1779603911915.jpeg";
 
 const MESSENGER_TOKEN_KEY = "messenger_rald_token";
-const RALD_AUTH_UI        = (import.meta.env.VITE_RALD_AUTH_URL as string | undefined) ?? "https://profiles.rald.cloud";
-const API_BASE            = (import.meta.env.VITE_API_BASE_URL as string) ?? "";
+const RALD_AUTH_UI = (import.meta.env.VITE_RALD_AUTH_URL as string | undefined) ?? "https://profiles.rald.cloud";
+
+// API_BASE is the root of the CF Worker (no /api suffix — auth.tsx calls /auth/* directly).
+const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
+  "https://messenger.rald.cloud";
 
 export default function AuthPage() {
   const [, setLocation] = useLocation();
@@ -48,16 +52,22 @@ export default function AuthPage() {
         }
       }
 
-      // ── Step 2: existing stored token ─────────────────────────────────────
+      // ── Step 2: validate stored token via /auth/me ─────────────────────────
+      // Calls the CF Worker's GET /auth/me (JWT decode — no DB round-trip).
       const stored = localStorage.getItem(MESSENGER_TOKEN_KEY);
       if (stored) {
         try {
           const r = await fetch(`${API_BASE}/auth/me`, {
             headers: { Authorization: `Bearer ${stored}` },
           });
-          if (r.ok) { setLocation("/chats"); return; }
+          if (r.ok) {
+            queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+            setLocation("/chats");
+            return;
+          }
+          // 401 = expired/invalid — clear and fall through to re-auth.
           localStorage.removeItem(MESSENGER_TOKEN_KEY);
-        } catch { /* fall through */ }
+        } catch { /* network error — fall through */ }
       }
 
       // ── Step 3: redirect to profiles ──────────────────────────────────────
