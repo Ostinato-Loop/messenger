@@ -9,7 +9,7 @@ import { notifyAssignment } from "../lib/notify";
 import { generateId, nowIso } from "../lib/auth";
 
 export const assignments = new Hono<AppContext>();
-assignments.use("/conversations*", authMiddleware, workspaceMiddleware);
+assignments.use("/conversations/*", authMiddleware, workspaceMiddleware);
 
 // ── GET /conversations/:id/assignments ────────────────────────────────────
 assignments.get("/conversations/:id/assignments", conversationAccessMiddleware, async (c) => {
