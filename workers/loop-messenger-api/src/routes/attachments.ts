@@ -8,7 +8,7 @@ import { writeAudit } from "../lib/audit";
 import { generateId, nowIso } from "../lib/auth";
 
 export const attachments = new Hono<AppContext>();
-attachments.use("/conversations*", authMiddleware, workspaceMiddleware);
+attachments.use("/conversations/*", authMiddleware, workspaceMiddleware);
 
 // ── POST /conversations/:id/attachments ───────────────────────────────────
 attachments.post("/conversations/:id/attachments", conversationAccessMiddleware, async (c) => {
