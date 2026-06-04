@@ -41,3 +41,31 @@ sso.post("/auth/rald-sso", async (c) => {
     message: "Use the RALD token as Bearer for all Messenger API calls",
   });
 });
+
+function parseSessionCookie(cookieHeader: string | null | undefined): string | null {
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(';')) {
+    const [k, ...v] = part.trim().split('=');
+    if (k?.trim() === 'rald_session') return v.join('=').trim() || null;
+  }
+  return null;
+}
+
+// GET /auth/silent — cookie-based silent session (Phase H, Identity Axiom)
+// Called on app mount to check if the rald_session cookie gives a valid session.
+sso.get('/auth/silent', async (c) => {
+  const cookieHeader = c.req.header('Cookie');
+  const token = parseSessionCookie(cookieHeader);
+  if (!token) {
+    return c.json({ valid: false, reason: 'no_session_cookie' }, 401);
+  }
+  const rald = await verifyJwt(token, c.env.RALD_JWT_SECRET);
+  if (!rald) {
+    return c.json({ valid: false, reason: 'invalid_or_expired_token' }, 401);
+  }
+  return c.json({
+    valid: true,
+    user: { id: rald.id, email: rald.email ?? null, role: rald.role ?? 'user' },
+    token,
+  });
+});
