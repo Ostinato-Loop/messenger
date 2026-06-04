@@ -10,7 +10,7 @@ import { indexMessage } from "../lib/search";
 import { generateId, nowIso } from "../lib/auth";
 
 export const messages = new Hono<AppContext>();
-messages.use("*", authMiddleware, workspaceMiddleware);
+messages.use("/conversations*", authMiddleware, workspaceMiddleware);
 
 // ── GET /conversations/:id/messages ───────────────────────────────────────
 messages.get("/conversations/:id/messages", conversationAccessMiddleware, async (c) => {
