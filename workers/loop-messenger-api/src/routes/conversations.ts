@@ -10,7 +10,8 @@ import { writeCrmActivity } from "../lib/crm";
 import { generateId, nowIso } from "../lib/auth";
 
 export const conversations = new Hono<AppContext>();
-conversations.use("/conversations*", authMiddleware, workspaceMiddleware);
+conversations.use("/conversations", authMiddleware, workspaceMiddleware);
+conversations.use("/conversations/*", authMiddleware, workspaceMiddleware);
 
 // ── GET /conversations ─────────────────────────────────────────────────────
 conversations.get("/conversations", async (c) => {
