@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   useGetMe,
   useListConversations,
@@ -18,7 +18,6 @@ import {
   useEditMessage,
   useDeleteMessage,
   useGetConversation,
-  useUpdateConversation,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -40,6 +39,9 @@ import { useCall } from "@/lib/call-provider";
 import { usePresence } from "@/lib/presence";
 import { useTyping } from "@/lib/typing";
 import { useRealtimeMessages } from "@/lib/realtime-messages";
+import { MobileShell } from "@/components/mobile-shell";
+import { LoopAvatar } from "@/components/loop-avatar";
+import { LoopLogo } from "@/components/loop-logo";
 
 const formatMessageTime = (dateStr: string) => format(new Date(dateStr), "HH:mm");
 
@@ -54,7 +56,8 @@ const EMOJIS = ["❤️", "😂", "😮", "😢", "👍", "🔥"];
 
 export default function ChatsPage() {
   const params = useParams();
-  const activeConvId = params.conversationId ? parseInt(params.conversationId, 10) : null;
+  // conversationId is a UUID string from the CF Worker; do not parseInt()
+  const activeConvId: string | null = params.conversationId ?? null;
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
@@ -70,6 +73,7 @@ export default function ChatsPage() {
 
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [convSearch, setConvSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<"all" | "unread" | "groups">("all");
 
   // ── Direct chat search ────────────────────────────────────────────────────
   const [directSearch, setDirectSearch] = useState("");
@@ -87,15 +91,15 @@ export default function ChatsPage() {
     { q: debouncedGroup },
     { query: { enabled: debouncedGroup.length > 1 } as any }
   );
-  const [selectedMembers, setSelectedMembers] = useState<Array<{ id: number; displayName: string }>>([]);
+  const [selectedMembers, setSelectedMembers] = useState<Array<{ id: string; displayName: string }>>([]);
 
   const createConversation = useCreateConversation();
 
-  const handleStartDirect = (userId: number) => {
+  const handleStartDirect = (userId: string) => {
     createConversation.mutate(
-      { data: { type: "direct", memberIds: [userId] } },
+      { data: { type: "direct", memberIds: [userId as any] } },
       {
-        onSuccess: (conv) => {
+        onSuccess: (conv: any) => {
           setIsNewChatOpen(false);
           setDirectSearch("");
           setLocation(`/chats/${conv.id}`);
@@ -112,11 +116,11 @@ export default function ChatsPage() {
         data: {
           type: "group",
           name: groupName.trim(),
-          memberIds: selectedMembers.map((m) => m.id),
+          memberIds: selectedMembers.map((m) => m.id as any),
         },
       },
       {
-        onSuccess: (conv) => {
+        onSuccess: (conv: any) => {
           setIsNewChatOpen(false);
           setGroupName("");
           setGroupSearch("");
@@ -128,7 +132,7 @@ export default function ChatsPage() {
     );
   };
 
-  const toggleMember = (user: { id: number; displayName: string }) => {
+  const toggleMember = (user: { id: string; displayName: string }) => {
     setSelectedMembers((prev) =>
       prev.some((m) => m.id === user.id)
         ? prev.filter((m) => m.id !== user.id)
@@ -137,367 +141,379 @@ export default function ChatsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* Sidebar */}
-      <div
-        className={`w-full md:w-80 lg:w-96 flex-shrink-0 flex flex-col border-r border-border bg-card/30 backdrop-blur-md transition-transform ${
-          activeConvId ? "hidden md:flex" : "flex"
-        }`}
-      >
-        {/* Header */}
-        <div className="px-4 pt-4 pb-3 border-b border-border space-y-3">
-          <div className="flex items-center justify-between">
-            <div
-              className="flex items-center gap-3 cursor-pointer"
-              onClick={() => setLocation("/profile")}
-            >
-              <Avatar className="w-9 h-9 border border-primary/20">
-                <AvatarImage src={me?.avatar || ""} />
-                <AvatarFallback className="bg-muted text-primary text-xs">
-                  {me?.displayName?.substring(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <h2 className="font-semibold text-sm leading-tight">{me?.displayName}</h2>
-                <p className="text-[11px] text-primary leading-tight">
-                  {stats?.totalUnread ? `${stats.totalUnread} unread` : "All caught up ✓"}
-                </p>
+    <MobileShell>
+      <div className="flex h-full bg-background text-foreground overflow-hidden">
+        {/* Sidebar */}
+        <div
+          className={`w-full md:w-80 lg:w-96 flex-shrink-0 flex flex-col border-r border-border bg-card/30 backdrop-blur-md transition-transform ${
+            activeConvId ? "hidden md:flex" : "flex"
+          }`}
+        >
+          {/* Header */}
+          <div className="px-4 pt-4 pb-3 border-b border-border space-y-3">
+            <div className="flex items-center justify-between">
+              {/* Left: LoopLogo + user identity */}
+              <div className="flex items-center gap-3">
+                <LoopLogo />
               </div>
-            </div>
 
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 w-8 h-8"
-                onClick={() => setLocation("/settings")}
-                title="Settings"
-              >
-                <Settings className="w-4 h-4" />
-              </Button>
-              <Dialog open={isNewChatOpen} onOpenChange={setIsNewChatOpen}>
-                <DialogTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="rounded-full text-primary hover:text-primary hover:bg-primary/10 w-8 h-8"
-                    title="New conversation"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </DialogTrigger>
-            <DialogContent className="bg-card border-border sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>New Conversation</DialogTitle>
-              </DialogHeader>
-
-              <Tabs defaultValue="direct" className="mt-2">
-                <TabsList className="w-full bg-muted/50 rounded-xl">
-                  <TabsTrigger value="direct" className="flex-1 rounded-lg">
-                    <MessageSquare className="w-4 h-4 mr-1.5" />
-                    Direct
-                  </TabsTrigger>
-                  <TabsTrigger value="group" className="flex-1 rounded-lg">
-                    <Users className="w-4 h-4 mr-1.5" />
-                    Group
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* ── Direct tab ─────────────────────────────────────────── */}
-                <TabsContent value="direct" className="space-y-3 pt-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search users..."
-                      value={directSearch}
-                      onChange={(e) => setDirectSearch(e.target.value)}
-                      className="pl-9 bg-input/50"
-                    />
-                  </div>
-                  <ScrollArea className="h-[280px]">
-                    {isSearchingDirect ? (
-                      <p className="text-center p-4 text-muted-foreground text-sm">Searching...</p>
-                    ) : directResults?.length ? (
-                      <div className="space-y-1">
-                        {directResults
-                          .filter((u) => u.id !== me?.id)
-                          .map((user) => (
-                            <div
-                              key={user.id}
-                              onClick={() => handleStartDirect(user.id)}
-                              className="flex items-center justify-between p-2.5 hover:bg-muted/50 rounded-xl cursor-pointer"
-                            >
-                              <div className="flex items-center gap-3">
-                                <Avatar>
-                                  <AvatarImage src={user.avatar || ""} />
-                                  <AvatarFallback>
-                                    {user.displayName.substring(0, 2).toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="font-medium text-sm">{user.displayName}</p>
-                                  <p className="text-xs text-muted-foreground">{user.phone}</p>
-                                </div>
-                              </div>
-                              <MessageSquare className="w-4 h-4 text-primary" />
-                            </div>
-                          ))}
-                      </div>
-                    ) : debouncedDirect.length > 1 ? (
-                      <p className="text-center p-4 text-muted-foreground text-sm">No users found</p>
-                    ) : (
-                      <p className="text-center p-4 text-muted-foreground text-sm">
-                        Type a name or number to search
-                      </p>
-                    )}
-                  </ScrollArea>
-                </TabsContent>
-
-                {/* ── Group tab ──────────────────────────────────────────── */}
-                <TabsContent value="group" className="space-y-3 pt-3">
-                  <Input
-                    placeholder="Group name..."
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    className="bg-input/50"
+              {/* Right: me avatar + settings + new chat */}
+              <div className="flex items-center gap-1">
+                <div
+                  className="flex items-center gap-2 cursor-pointer mr-1"
+                  onClick={() => setLocation("/profile")}
+                  title="Your profile"
+                >
+                  <LoopAvatar
+                    src={me?.avatar}
+                    name={me?.displayName}
+                    size="sm"
+                    isOnline={true}
                   />
-
-                  {selectedMembers.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 p-2 bg-muted/30 rounded-xl">
-                      {selectedMembers.map((m) => (
-                        <Badge
-                          key={m.id}
-                          variant="secondary"
-                          className="cursor-pointer gap-1 pr-1"
-                          onClick={() => toggleMember(m)}
-                        >
-                          {m.displayName}
-                          <X className="w-3 h-3" />
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Add members..."
-                      value={groupSearch}
-                      onChange={(e) => setGroupSearch(e.target.value)}
-                      className="pl-9 bg-input/50"
-                    />
-                  </div>
-
-                  <ScrollArea className="h-[180px]">
-                    {isSearchingGroup ? (
-                      <p className="text-center p-4 text-muted-foreground text-sm">Searching...</p>
-                    ) : groupResults?.length ? (
-                      <div className="space-y-1">
-                        {groupResults
-                          .filter((u) => u.id !== me?.id)
-                          .map((user) => {
-                            const selected = selectedMembers.some((m) => m.id === user.id);
-                            return (
-                              <div
-                                key={user.id}
-                                onClick={() => toggleMember({ id: user.id, displayName: user.displayName })}
-                                className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-colors ${
-                                  selected ? "bg-primary/10 border border-primary/20" : "hover:bg-muted/50"
-                                }`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <Avatar className="w-8 h-8">
-                                    <AvatarImage src={user.avatar || ""} />
-                                    <AvatarFallback className="text-xs">
-                                      {user.displayName.substring(0, 2).toUpperCase()}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <p className="font-medium text-sm">{user.displayName}</p>
-                                </div>
-                                {selected && <Check className="w-4 h-4 text-primary" />}
-                              </div>
-                            );
-                          })}
-                      </div>
-                    ) : debouncedGroup.length > 1 ? (
-                      <p className="text-center p-4 text-muted-foreground text-sm">No users found</p>
-                    ) : (
-                      <p className="text-center p-4 text-muted-foreground text-sm">
-                        Search to add members
-                      </p>
-                    )}
-                  </ScrollArea>
-
-                  <Button
-                    className="w-full bg-primary hover:bg-primary/90 text-white rounded-xl h-10"
-                    disabled={!groupName.trim() || selectedMembers.length < 1 || createConversation.isPending}
-                    onClick={handleCreateGroup}
-                  >
-                    {createConversation.isPending
-                      ? "Creating..."
-                      : `Create Group${selectedMembers.length > 0 ? ` (${selectedMembers.length + 1})` : ""}`}
-                  </Button>
-                </TabsContent>
-              </Tabs>
-            </DialogContent>
-              </Dialog>
-            </div>
-          </div>
-
-          {/* Conversation search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <input
-              value={convSearch}
-              onChange={(e) => setConvSearch(e.target.value)}
-              placeholder="Search conversations…"
-              className="w-full h-9 pl-9 pr-3 bg-muted/40 border border-border rounded-full text-sm outline-none focus:border-primary/50 focus:ring-0 transition-colors placeholder:text-muted-foreground/50"
-            />
-          </div>
-        </div>
-
-        {/* Conversation list */}
-        <ScrollArea className="flex-1">
-          {isLoadingConvs ? (
-            <div className="p-4 space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex gap-3">
-                  <div className="w-12 h-12 rounded-full bg-muted animate-pulse" />
-                  <div className="flex-1 space-y-2 py-1">
-                    <div className="h-4 bg-muted rounded w-1/3 animate-pulse" />
-                    <div className="h-3 bg-muted rounded w-2/3 animate-pulse" />
+                  <div className="hidden sm:block">
+                    <p className="text-xs font-medium leading-tight truncate max-w-[80px]">{me?.displayName}</p>
+                    <p className="text-[10px] text-primary leading-tight">
+                      {(stats as any)?.totalUnread ? `${(stats as any).totalUnread} unread` : "All caught up ✓"}
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : conversations?.length ? (
-            <div className="p-2 space-y-1">
-              {conversations.filter((conv) => {
-                if (!convSearch.trim()) return true;
-                const q = convSearch.toLowerCase();
-                const other = conv.members.find((m: any) => m.userId !== me?.id)?.user;
-                const name = (conv.name || other?.displayName || "").toLowerCase();
-                const last = (conv.lastMessage?.content || "").toLowerCase();
-                return name.includes(q) || last.includes(q);
-              }).map((conv) => {
-                const otherMember = conv.members.find((m) => m.userId !== me?.id)?.user;
-                const name = conv.name || otherMember?.displayName || "Unknown";
-                const avatar = conv.avatar || otherMember?.avatar;
-                const isUnread = conv.unreadCount > 0;
-                const isGroup = conv.type === "group";
 
-                return (
-                  <div
-                    key={conv.id}
-                    onClick={() => setLocation(`/chats/${conv.id}`)}
-                    className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-colors ${
-                      activeConvId === conv.id
-                        ? "bg-primary/10 border border-primary/20"
-                        : "hover:bg-muted/50"
-                    }`}
-                  >
-                    <div className="relative flex-shrink-0">
-                      <Avatar className="w-12 h-12 border border-border">
-                        <AvatarImage src={avatar || ""} />
-                        <AvatarFallback className="bg-card text-foreground">
-                          {isGroup ? (
-                            <Users className="w-5 h-5 text-muted-foreground" />
-                          ) : (
-                            name.substring(0, 2).toUpperCase()
-                          )}
-                        </AvatarFallback>
-                      </Avatar>
-                      {!isGroup && otherMember && (
-                        onlineUserIds.size > 0
-                          ? onlineUserIds.has(otherMember.id)
-                          : otherMember.isOnline
-                      ) && (
-                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full" />
-                      )}
-                      {isGroup && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-primary/80 rounded-full flex items-center justify-center">
-                          <Users className="w-2.5 h-2.5 text-white" />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 w-8 h-8"
+                  onClick={() => setLocation("/settings")}
+                  title="Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </Button>
+
+                <Dialog open={isNewChatOpen} onOpenChange={setIsNewChatOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="rounded-full text-primary hover:text-primary hover:bg-primary/10 w-8 h-8"
+                      title="New conversation"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-card border-border sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>New Conversation</DialogTitle>
+                    </DialogHeader>
+
+                    <Tabs defaultValue="direct" className="mt-2">
+                      <TabsList className="w-full bg-muted/50 rounded-xl">
+                        <TabsTrigger value="direct" className="flex-1 rounded-lg">
+                          <MessageSquare className="w-4 h-4 mr-1.5" />
+                          Direct
+                        </TabsTrigger>
+                        <TabsTrigger value="group" className="flex-1 rounded-lg">
+                          <Users className="w-4 h-4 mr-1.5" />
+                          Group
+                        </TabsTrigger>
+                      </TabsList>
+
+                      {/* ── Direct tab ─────────────────────────────────────────── */}
+                      <TabsContent value="direct" className="space-y-3 pt-3">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Search users..."
+                            value={directSearch}
+                            onChange={(e) => setDirectSearch(e.target.value)}
+                            className="pl-9 bg-input/50"
+                          />
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-baseline mb-0.5">
-                        <h3 className={`font-semibold truncate text-sm ${isUnread ? "text-foreground" : "text-foreground/80"}`}>
-                          {name}
-                        </h3>
-                        {conv.lastMessage && (
-                          <span className={`text-[10px] whitespace-nowrap ml-1 ${isUnread ? "text-primary font-medium" : "text-muted-foreground"}`}>
-                            {formatConversationDate(conv.lastMessage.createdAt)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex justify-between items-center gap-2">
-                        <p className={`text-xs truncate ${isUnread ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                          {conv.lastMessage?.content || "No messages yet"}
-                        </p>
-                        {isUnread && (
-                          <div className="min-w-[18px] h-[18px] rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-primary-foreground shadow-[0_0_8px_rgba(255,107,0,0.5)] px-1">
-                            {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+                        <ScrollArea className="h-[280px]">
+                          {isSearchingDirect ? (
+                            <p className="text-center p-4 text-muted-foreground text-sm">Searching...</p>
+                          ) : directResults?.length ? (
+                            <div className="space-y-1">
+                              {(directResults as any[])
+                                .filter((u: any) => u.id !== me?.id)
+                                .map((user: any) => (
+                                  <div
+                                    key={user.id}
+                                    onClick={() => handleStartDirect(user.id)}
+                                    className="flex items-center justify-between p-2.5 hover:bg-muted/50 rounded-xl cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <LoopAvatar src={user.avatar} name={user.displayName} size="sm" />
+                                      <div>
+                                        <p className="font-medium text-sm">{user.displayName}</p>
+                                        <p className="text-xs text-muted-foreground">{user.phone}</p>
+                                      </div>
+                                    </div>
+                                    <MessageSquare className="w-4 h-4 text-primary" />
+                                  </div>
+                                ))}
+                            </div>
+                          ) : debouncedDirect.length > 1 ? (
+                            <p className="text-center p-4 text-muted-foreground text-sm">No users found</p>
+                          ) : (
+                            <p className="text-center p-4 text-muted-foreground text-sm">
+                              Type a name or number to search
+                            </p>
+                          )}
+                        </ScrollArea>
+                      </TabsContent>
+
+                      {/* ── Group tab ──────────────────────────────────────────── */}
+                      <TabsContent value="group" className="space-y-3 pt-3">
+                        <Input
+                          placeholder="Group name..."
+                          value={groupName}
+                          onChange={(e) => setGroupName(e.target.value)}
+                          className="bg-input/50"
+                        />
+
+                        {selectedMembers.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 p-2 bg-muted/30 rounded-xl">
+                            {selectedMembers.map((m) => (
+                              <Badge
+                                key={m.id}
+                                variant="secondary"
+                                className="cursor-pointer gap-1 pr-1"
+                                onClick={() => toggleMember(m)}
+                              >
+                                {m.displayName}
+                                <X className="w-3 h-3" />
+                              </Badge>
+                            ))}
                           </div>
                         )}
-                      </div>
+
+                        <div className="relative">
+                          <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Add members..."
+                            value={groupSearch}
+                            onChange={(e) => setGroupSearch(e.target.value)}
+                            className="pl-9 bg-input/50"
+                          />
+                        </div>
+
+                        <ScrollArea className="h-[180px]">
+                          {isSearchingGroup ? (
+                            <p className="text-center p-4 text-muted-foreground text-sm">Searching...</p>
+                          ) : groupResults?.length ? (
+                            <div className="space-y-1">
+                              {(groupResults as any[])
+                                .filter((u: any) => u.id !== me?.id)
+                                .map((user: any) => {
+                                  const selected = selectedMembers.some((m) => m.id === user.id);
+                                  return (
+                                    <div
+                                      key={user.id}
+                                      onClick={() => toggleMember({ id: user.id, displayName: user.displayName })}
+                                      className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-colors ${
+                                        selected ? "bg-primary/10 border border-primary/20" : "hover:bg-muted/50"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <LoopAvatar src={user.avatar} name={user.displayName} size="sm" />
+                                        <p className="font-medium text-sm">{user.displayName}</p>
+                                      </div>
+                                      {selected && <Check className="w-4 h-4 text-primary" />}
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          ) : debouncedGroup.length > 1 ? (
+                            <p className="text-center p-4 text-muted-foreground text-sm">No users found</p>
+                          ) : (
+                            <p className="text-center p-4 text-muted-foreground text-sm">
+                              Search to add members
+                            </p>
+                          )}
+                        </ScrollArea>
+
+                        <Button
+                          className="w-full bg-primary hover:bg-primary/90 text-white rounded-xl h-10"
+                          disabled={!groupName.trim() || selectedMembers.length < 1 || createConversation.isPending}
+                          onClick={handleCreateGroup}
+                        >
+                          {createConversation.isPending
+                            ? "Creating..."
+                            : `Create Group${selectedMembers.length > 0 ? ` (${selectedMembers.length + 1})` : ""}`}
+                        </Button>
+                      </TabsContent>
+                    </Tabs>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+
+            {/* Conversation search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                value={convSearch}
+                onChange={(e) => setConvSearch(e.target.value)}
+                placeholder="Search conversations…"
+                className="w-full h-9 pl-9 pr-3 bg-muted/40 border border-border rounded-full text-sm outline-none focus:border-primary/50 focus:ring-0 transition-colors placeholder:text-muted-foreground/50"
+              />
+            </div>
+
+            {/* Filter chips — All | Unread | Groups */}
+            <div className="flex gap-1.5">
+              {(["all", "unread", "groups"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setActiveFilter(f)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    activeFilter === f
+                      ? "bg-primary text-primary-foreground shadow-[0_0_8px_rgba(255,107,0,0.4)]"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {f === "all" ? "All" : f === "unread" ? "Unread" : "Groups"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Conversation list */}
+          <ScrollArea className="flex-1">
+            {isLoadingConvs ? (
+              <div className="p-4 space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className="w-12 h-12 rounded-full bg-muted animate-pulse" />
+                    <div className="flex-1 space-y-2 py-1">
+                      <div className="h-4 bg-muted rounded w-1/3 animate-pulse" />
+                      <div className="h-3 bg-muted rounded w-2/3 animate-pulse" />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4 text-muted-foreground">
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-                <MessageSquare className="w-8 h-8 opacity-50" />
+                ))}
               </div>
-              <p className="text-sm">No conversations yet.<br />Click + to start chatting.</p>
+            ) : (conversations as any[])?.length ? (
+              <div className="p-2 space-y-1">
+                {(conversations as any[]).filter((conv: any) => {
+                  // Chip filter
+                  if (activeFilter === "unread" && !(conv.unreadCount > 0)) return false;
+                  if (activeFilter === "groups" && conv.type !== "group") return false;
+                  // Text search
+                  if (!convSearch.trim()) return true;
+                  const q = convSearch.toLowerCase();
+                  const other = conv.members?.find((m: any) => m.userId !== me?.id)?.user;
+                  const name = (conv.name || other?.displayName || "").toLowerCase();
+                  const last = (conv.lastMessage?.content || "").toLowerCase();
+                  return name.includes(q) || last.includes(q);
+                }).map((conv: any) => {
+                  const otherMember = conv.members?.find((m: any) => m.userId !== me?.id)?.user;
+                  const name = conv.name || otherMember?.displayName || "Unknown";
+                  const avatar = conv.avatar || otherMember?.avatar;
+                  const isUnread = (conv.unreadCount ?? 0) > 0;
+                  const isGroup = conv.type === "group";
+                  const isOnline = !isGroup && otherMember
+                    ? (onlineUserIds.size > 0 ? onlineUserIds.has(otherMember.id) : otherMember.isOnline)
+                    : false;
+
+                  return (
+                    <div
+                      key={conv.id}
+                      onClick={() => setLocation(`/chats/${conv.id}`)}
+                      className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-colors ${
+                        activeConvId === conv.id
+                          ? "bg-primary/10 border border-primary/20"
+                          : "hover:bg-muted/50"
+                      }`}
+                    >
+                      <LoopAvatar
+                        src={avatar}
+                        name={name}
+                        size="md"
+                        isGroup={isGroup}
+                        isOnline={isOnline}
+                        isVerified={(otherMember as any)?.isVerified ?? false}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline mb-0.5">
+                          <h3 className={`font-semibold truncate text-sm ${isUnread ? "text-foreground" : "text-foreground/80"}`}>
+                            {name}
+                          </h3>
+                          {conv.lastMessage && (
+                            <span className={`text-[10px] whitespace-nowrap ml-1 ${isUnread ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                              {formatConversationDate(conv.lastMessage.createdAt)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex justify-between items-center gap-2">
+                          <p className={`text-xs truncate ${isUnread ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                            {conv.lastMessage?.content || "No messages yet"}
+                          </p>
+                          {isUnread && (
+                            <div className="min-w-[18px] h-[18px] rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-primary-foreground shadow-[0_0_8px_rgba(255,107,0,0.5)] px-1">
+                              {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4 text-muted-foreground">
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                  <MessageSquare className="w-8 h-8 opacity-50" />
+                </div>
+                <p className="text-sm">No conversations yet.<br />Click + to start chatting.</p>
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+
+        {/* Main Chat Area */}
+        <div
+          className={`flex-1 flex-col bg-background/50 relative ${
+            !activeConvId ? "hidden md:flex" : "flex"
+          }`}
+        >
+          {activeConvId ? (
+            <ActiveChat conversationId={activeConvId} me={me} onlineUserIds={onlineUserIds} />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+              <img src={loopLogo} alt="Loop" className="w-24 h-24 mb-6 opacity-20 grayscale rounded-3xl" />
+              <p className="text-lg font-medium">Select a conversation</p>
+              <p className="text-sm mt-1">End-to-end encrypted · Hyper-fast</p>
             </div>
           )}
-        </ScrollArea>
+        </div>
       </div>
-
-      {/* Main Chat Area */}
-      <div
-        className={`flex-1 flex-col bg-background/50 relative ${
-          !activeConvId ? "hidden md:flex" : "flex"
-        }`}
-      >
-        {activeConvId ? (
-          <ActiveChat conversationId={activeConvId} me={me} onlineUserIds={onlineUserIds} />
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-            <img src={loopLogo} alt="Loop" className="w-24 h-24 mb-6 opacity-20 grayscale rounded-3xl" />
-            <p className="text-lg font-medium">Select a conversation</p>
-            <p className="text-sm mt-1">End-to-end encrypted · Hyper-fast</p>
-          </div>
-        )}
-      </div>
-    </div>
+    </MobileShell>
   );
 }
 
-function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: number; me: any; onlineUserIds: Set<number> }) {
+function ActiveChat({ conversationId, me, onlineUserIds }: {
+  conversationId: string | number;
+  me: any;
+  onlineUserIds: Set<string | number>;
+}) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: conv } = useGetConversation(conversationId);
+  const { data: conv } = useGetConversation(conversationId as any);
   const network = useNetworkQuality();
   const { startCall } = useCall();
 
-  useRealtimeMessages(conversationId);
-  const typing = useTyping(conversationId, me?.id, me?.displayName);
+  useRealtimeMessages(conversationId as any);
+  const typing = useTyping(conversationId as any, me?.id, me?.displayName);
 
-  const { data: messages, isLoading } = useListMessages(conversationId, {
+  const { data: messages, isLoading } = useListMessages(conversationId as any, {
     query: { refetchInterval: network.pollInterval > 0 ? network.pollInterval : false } as any,
   });
 
-  const sendMessage = useSendMessage();
-  const markRead = useMarkConversationRead();
-  const addReaction = useAddReaction();
+  const sendMessage   = useSendMessage();
+  const markRead      = useMarkConversationRead();
+  const addReaction   = useAddReaction();
   const removeReaction = useRemoveReaction();
-  const editMessage = useEditMessage();
+  const editMessage   = useEditMessage();
   const deleteMessage = useDeleteMessage();
 
   const [inputText, setInputText] = useState("");
@@ -505,8 +521,8 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
   const [voiceActive, setVoiceActive] = useState(false);
 
   useEffect(() => {
-    markRead.mutate({ conversationId });
-  }, [conversationId, messages?.length]);
+    markRead.mutate({ conversationId: conversationId as any });
+  }, [conversationId, (messages as any)?.length]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -526,23 +542,23 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
         {
           onSuccess: () => {
             setEditingId(null);
-            queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId) });
+            queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId as any) });
           },
           onError: () => setInputText(text),
         }
       );
     } else {
       const text = inputText;
-      setInputText(""); // Optimistic clear — feels instant on 3G
+      setInputText("");
       sendMessage.mutate(
-        { conversationId, data: { type: "text", content: text } },
+        { conversationId: conversationId as any, data: { type: "text", content: text } },
         {
           onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId) });
+            queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId as any) });
             queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetConversationStatsQueryKey() });
           },
-          onError: () => setInputText(text), // restore on failure
+          onError: () => setInputText(text),
         }
       );
     }
@@ -551,7 +567,7 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
   const handleVoiceSend = (dataUrl: string, durationSeconds: number) => {
     sendMessage.mutate(
       {
-        conversationId,
+        conversationId: conversationId as any,
         data: {
           type: "audio",
           content: `Voice note (${formatDuration(durationSeconds)})`,
@@ -561,7 +577,7 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
       {
         onSuccess: () => {
           setVoiceActive(false);
-          queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId) });
+          queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(conversationId as any) });
           queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetConversationStatsQueryKey() });
         },
@@ -576,16 +592,20 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
     }
   };
 
-  const isGroup = conv?.type === "group";
+  const anyConv = conv as any;
+  const isGroup = anyConv?.type === "group";
   const otherMemberEntry = !isGroup
-    ? conv?.members.find((m) => m.userId !== me?.id)
+    ? anyConv?.members?.find((m: any) => m.userId !== me?.id)
     : undefined;
-  const otherMember = otherMemberEntry?.user;
+  const otherMember   = otherMemberEntry?.user;
   const otherLastReadAt = otherMemberEntry?.lastReadAt
     ? new Date(otherMemberEntry.lastReadAt)
     : null;
-  const name = conv?.name || otherMember?.displayName || "Loading...";
-  const avatar = conv?.avatar || otherMember?.avatar;
+  const name   = anyConv?.name || otherMember?.displayName || "Loading...";
+  const avatar = anyConv?.avatar || otherMember?.avatar;
+  const isOtherOnline = !isGroup && otherMember
+    ? (onlineUserIds.size > 0 ? onlineUserIds.has(otherMember.id) : otherMember.isOnline)
+    : false;
 
   return (
     <>
@@ -600,19 +620,21 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
           >
             <X className="w-5 h-5" />
           </Button>
-          <Avatar className="w-10 h-10">
-            <AvatarImage src={avatar || ""} />
-            <AvatarFallback>
-              {isGroup ? <Users className="w-4 h-4" /> : name.substring(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
+          <LoopAvatar
+            src={avatar}
+            name={name}
+            size="sm"
+            isGroup={isGroup}
+            isOnline={isOtherOnline}
+            isVerified={(otherMember as any)?.isVerified ?? false}
+          />
           <div>
             <h2 className="font-semibold leading-tight">{name}</h2>
             {isGroup ? (
               <p className="text-xs text-muted-foreground">
-                {conv?.members?.length} members
+                {anyConv?.members?.length} members
               </p>
-            ) : (onlineUserIds.size > 0 ? onlineUserIds.has(otherMember?.id ?? 0) : otherMember?.isOnline) ? (
+            ) : isOtherOnline ? (
               <p className="text-xs text-primary">Online</p>
             ) : otherMember?.lastSeen ? (
               <p className="text-xs text-muted-foreground">
@@ -629,11 +651,11 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
               className="text-muted-foreground hover:text-primary hover:bg-primary/10"
               onClick={() =>
                 startCall({
-                  conversationId,
-                  respondentId: otherMember.id,
-                  peerName: otherMember.displayName,
-                  peerAvatar: otherMember.avatar ?? undefined,
-                  type: "voice",
+                  conversationId: conversationId as any,
+                  respondentId:   otherMember.id,
+                  peerName:       otherMember.displayName,
+                  peerAvatar:     otherMember.avatar ?? undefined,
+                  type:           "voice",
                 })
               }
               title="Voice call"
@@ -646,11 +668,11 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
               className="text-muted-foreground hover:text-primary hover:bg-primary/10"
               onClick={() =>
                 startCall({
-                  conversationId,
-                  respondentId: otherMember.id,
-                  peerName: otherMember.displayName,
-                  peerAvatar: otherMember.avatar ?? undefined,
-                  type: "video",
+                  conversationId: conversationId as any,
+                  respondentId:   otherMember.id,
+                  peerName:       otherMember.displayName,
+                  peerAvatar:     otherMember.avatar ?? undefined,
+                  type:           "video",
                 })
               }
               title="Video call"
@@ -666,12 +688,13 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
         {isLoading ? (
           <SkeletonMessageList />
         ) : (
-          messages?.map((msg, index) => {
+          (messages as any[])?.map((msg: any, index: number) => {
             const isMe = msg.senderId === me?.id;
+            const msgArr = messages as any[];
             const showAvatar =
               !isMe &&
-              (index === messages.length - 1 ||
-                messages[index + 1]?.senderId !== msg.senderId);
+              (index === msgArr.length - 1 ||
+                msgArr[index + 1]?.senderId !== msg.senderId);
 
             return (
               <motion.div
@@ -694,12 +717,11 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
                   {!isMe && (
                     <div className="w-8 flex-shrink-0 flex items-end">
                       {showAvatar && (
-                        <Avatar className="w-8 h-8">
-                          <AvatarImage src={msg.sender?.avatar || ""} />
-                          <AvatarFallback className="text-[10px]">
-                            {msg.sender?.displayName?.substring(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                        <LoopAvatar
+                          src={msg.sender?.avatar}
+                          name={msg.sender?.displayName}
+                          size="sm"
+                        />
                       )}
                     </div>
                   )}
@@ -744,10 +766,8 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
                         </div>
                         {msg.reactions && msg.reactions.length > 0 && (
                           <div className="absolute -bottom-3 left-4 flex gap-0.5 bg-background border border-border rounded-full px-1.5 py-0.5 shadow-sm">
-                            {msg.reactions.map((r) => (
-                              <span key={r.userId} className="text-xs">
-                                {r.emoji}
-                              </span>
+                            {msg.reactions.map((r: any) => (
+                              <span key={r.userId} className="text-xs">{r.emoji}</span>
                             ))}
                           </div>
                         )}
@@ -771,7 +791,7 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
                               deleteMessage.mutate({ messageId: msg.id }, {
                                 onSuccess: () =>
                                   queryClient.invalidateQueries({
-                                    queryKey: getListMessagesQueryKey(conversationId),
+                                    queryKey: getListMessagesQueryKey(conversationId as any),
                                   }),
                               })
                             }
@@ -788,7 +808,7 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
                             className="hover:scale-125 transition-transform text-base"
                             onClick={() => {
                               const hasReacted = msg.reactions?.some(
-                                (r) => r.userId === me?.id && r.emoji === emoji
+                                (r: any) => r.userId === me?.id && r.emoji === emoji
                               );
                               if (hasReacted) {
                                 removeReaction.mutate({ messageId: msg.id, emoji });
@@ -796,7 +816,7 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
                                 addReaction.mutate({ messageId: msg.id, data: { emoji } });
                               }
                               queryClient.invalidateQueries({
-                                queryKey: getListMessagesQueryKey(conversationId),
+                                queryKey: getListMessagesQueryKey(conversationId as any),
                               });
                             }}
                           >
@@ -822,7 +842,7 @@ function ActiveChat({ conversationId, me, onlineUserIds }: { conversationId: num
             <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" />
           </span>
           <span>
-            {typing.typingUsers.map((u) => u.displayName).join(", ")}{" "}
+            {typing.typingUsers.map((u: any) => u.displayName).join(", ")}{" "}
             {typing.typingUsers.length === 1 ? "is" : "are"} typing…
           </span>
         </div>
