@@ -86,4 +86,20 @@ app.onError((err, c) => {
   return c.json({ error: "Internal server error" }, 500);
 });
 
-export default app;
+export default {
+  async fetch(req: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
+    // ── FAIL FAST — exit 503 if critical secrets missing ─────────────────────
+    const missing: string[] = [];
+    if (!env.RALD_JWT_SECRET)           missing.push('RALD_JWT_SECRET');
+    if (!env.SUPABASE_URL)              missing.push('SUPABASE_URL');
+    if (!env.SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+    if (missing.length) {
+      console.error('[FATAL] loop-messenger-api: missing secrets:', missing.join(', '));
+      return new Response(JSON.stringify({ error: 'Service misconfigured', missing, service: 'loop-messenger-api' }), {
+        status: 503, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return app.fetch(req, env, ctx);
+  },
+};
+
