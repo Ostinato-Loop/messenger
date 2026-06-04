@@ -1,5 +1,5 @@
 // Loop Messenger API — Cloudflare Worker
-// Deployed at: messenger.rald.cloud | Version: 1.2.0
+// Deployed at: messenger.rald.cloud | Version: 1.2.1
 // Phase G1 — Foundation + G.12 RALD SSO + G.13 Consumer API (/api prefix)
 // LILCKY STUDIO LIMITED
 //
@@ -23,17 +23,33 @@ import { sso } from "./routes/sso";
 import { users } from "./routes/users";
 import { search } from "./routes/search";
 
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 
 const app = new Hono<AppContext>();
 
+// CORS allowlist:
+//   chat.rald.cloud         — Messenger frontend (primary consumer)
+//   messenger.rald.cloud    — API worker self-reference / Cloudflare Pages mirror
+//   rald.cloud              — Root domain (shared auth flows)
+//   app.rald.cloud          — RALD app shell
+//   profiles.rald.cloud     — Profiles cross-app navigation
+//   loop.rald.cloud         — Loop cross-app navigation
+//   business.rald.cloud     — Business workspace
+//   admin.rald.cloud        — Internal admin tooling
+//   control.rald.cloud      — RALD Control Center
+//   loop-messenger.pages.dev — Cloudflare Pages preview
+//   rald-control-center.pages.dev — Control Center preview
+//   localhost               — Local development
+//
+// NOTE: sv.rald.cloud is the RALD admin/supervisor plane and does NOT
+// interact with the Messenger API directly. It is intentionally excluded.
 app.use("*", cors({
   origin: [
+    "https://chat.rald.cloud",
     "https://rald.cloud",
     "https://app.rald.cloud",
     "https://messenger.rald.cloud",
     "https://loop.rald.cloud",
-    "https://sv.rald.cloud",
     "https://business.rald.cloud",
     "https://admin.rald.cloud",
     "https://control.rald.cloud",

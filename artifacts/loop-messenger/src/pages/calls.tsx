@@ -1,13 +1,22 @@
-// Loop Messenger — Calls Page (Launch UI)
-// Adopted from loop-messenger-ui-ux reference design.
-// Adapted for Wouter router.
+// Loop Messenger — Calls Page
+// Sprint 02 Trust & Retention: removed fake call history and audio rooms from mock-data.
+// Calls backend and call history API are not yet live. Honest empty states shown.
+// No fake names, no fake listener counts, no fake call history.
 // LILCKY STUDIO LIMITED
 
-import { Phone, Video, PhoneIncoming, PhoneOutgoing, PhoneMissed, Radio, Users } from "lucide-react";
-import { calls, audioRooms } from "@/lib/mock-data";
-import { cn } from "@/lib/utils";
+import { Phone, Video, Radio, PhoneOff } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 function CallsPage() {
+  const { toast } = useToast();
+
+  const handleNewCall = () => {
+    toast({
+      title: "Start a call",
+      description: "Select a conversation from Chats and tap the call button to start a voice or video call.",
+    });
+  };
+
   return (
     <div className="pb-20">
       <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/60 bg-background/90 px-4 py-3 backdrop-blur-xl">
@@ -15,72 +24,60 @@ function CallsPage() {
           <h1 className="truncate text-xl font-semibold tracking-tight">Calls</h1>
           <p className="truncate text-xs text-muted-foreground">Voice, video, audio rooms</p>
         </div>
-        <button className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-surface hover:text-foreground">
+        <button
+          onClick={handleNewCall}
+          className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-surface hover:text-foreground"
+          aria-label="New call"
+        >
           <Video className="h-5 w-5" />
         </button>
       </header>
 
-      <div className="px-4 pt-4">
-        <section className="mb-5">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live audio rooms</h2>
-          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {audioRooms.map((r) => (
-              <div
-                key={r.id}
-                className="flex w-64 shrink-0 flex-col gap-3 rounded-2xl border border-border/60 bg-surface p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <span
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                      r.live ? "bg-primary/15 text-primary" : "bg-surface text-muted-foreground"
-                    )}
-                  >
-                    <Radio className="h-3 w-3" /> {r.live ? "Live" : "Scheduled"}
-                  </span>
-                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <Users className="h-3 w-3" /> {r.listeners}
-                  </span>
-                </div>
-                <p className="text-sm font-semibold leading-snug">{r.title}</p>
-                <p className="text-[11px] text-muted-foreground">Hosted by {r.host}</p>
-                <button className="mt-1 rounded-full bg-primary text-primary-foreground py-1.5 text-xs font-semibold">
-                  {r.live ? "Join room" : "Remind me"}
-                </button>
-              </div>
-            ))}
+      <div className="px-4 pt-4 space-y-4">
+        {/* Live audio rooms — honest empty state (rooms come from Loop API) */}
+        <section>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Live audio rooms
+          </h2>
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-surface/50 px-6 py-8 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary">
+              <Radio className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">No live rooms right now</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Open Loop to browse and join audio rooms.
+              </p>
+            </div>
           </div>
         </section>
 
+        {/* Call history — honest empty state */}
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recent</h2>
-            <button className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Recent
+            </h2>
+            <button
+              onClick={handleNewCall}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground"
+              aria-label="New call"
+            >
               <Phone className="h-4 w-4" />
             </button>
           </div>
-          <ul className="divide-y divide-border/40">
-            {calls.map((c) => {
-              const Icon = c.direction === "missed" ? PhoneMissed : c.direction === "incoming" ? PhoneIncoming : PhoneOutgoing;
-              return (
-                <li key={c.id} className="flex items-center gap-3 py-3">
-                  <img src={c.avatar} alt={c.name} className="h-12 w-12 rounded-full object-cover" />
-                  <div className="min-w-0 flex-1">
-                    <p className={cn("truncate text-sm font-semibold", c.direction === "missed" && "text-destructive")}>
-                      {c.name}
-                    </p>
-                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Icon className="h-3.5 w-3.5" />
-                      {c.direction} · {c.time}
-                    </p>
-                  </div>
-                  <button className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-muted-foreground hover:text-foreground">
-                    {c.type === "video" ? <Video className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-surface/50 px-6 py-10 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary">
+              <PhoneOff className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">No call history yet</p>
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-[200px] mx-auto">
+                Your voice and video calls will appear here after your first call.
+              </p>
+            </div>
+          </div>
         </section>
       </div>
     </div>
