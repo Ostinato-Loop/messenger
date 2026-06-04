@@ -33,6 +33,7 @@ app.use("*", cors({
     "https://app.rald.cloud",
     "https://messenger.rald.cloud",
     "https://loop.rald.cloud",
+    "https://sv.rald.cloud",
     "https://business.rald.cloud",
     "https://admin.rald.cloud",
     "https://control.rald.cloud",

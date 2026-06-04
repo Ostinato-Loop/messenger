@@ -46,26 +46,52 @@ sso.post("/auth/rald-sso", async (c) => {
 });
 
 // ── GET /auth/me ──────────────────────────────────────────────────────────
-// Returns user identity derived from the Bearer JWT.
-// Called by auth.tsx to validate a stored token, and by the generated API
-// client (via /api/auth/me) to hydrate the logged-in user object.
-sso.get("/auth/me", authMiddleware, (c) => {
+// Returns user identity from the Bearer JWT, enriched with real profile data
+// from the Supabase profiles table (display_name, avatar_url, bio, username).
+// Falls back to email-derived values if the profile row does not exist yet.
+sso.get("/auth/me", authMiddleware, async (c) => {
   const user = c.get("user");
+  const db   = c.get("db");
   const email = user.email ?? "";
 
-  // Derive a readable display name from the email username part.
-  // Profiles service may override this once profile data is loaded.
-  const raw = email.split("@")[0] ?? "";
-  const displayName = raw
-    ? raw.replace(/[._-]/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()).trim()
+  // ── Derive email-based fallback display name ─────────────────────────────
+  const raw = (email.split("@")[0] ?? "").replace(/[._-]/g, " ").trim();
+  const fallbackName = raw
+    ? raw.replace(/\b\w/g, (l) => l.toUpperCase())
     : "RALD User";
+
+  // ── Fetch real profile from Supabase profiles table ──────────────────────
+  let displayName = fallbackName;
+  let avatar: string | null = null;
+  let bio: string | null = null;
+  let username: string | null = null;
+
+  try {
+    const { data } = await db
+      .from("profiles")
+      .select("display_name,username,avatar_url,bio")
+      .eq("id", user.id)
+      .single();
+
+    if (data) {
+      displayName = (data.display_name as string | null)
+        ?? (data.username as string | null)
+        ?? fallbackName;
+      avatar      = (data.avatar_url as string | null) ?? null;
+      bio         = (data.bio as string | null) ?? null;
+      username    = (data.username as string | null) ?? null;
+    }
+  } catch {
+    // profiles table unavailable or row not found — serve fallback values
+  }
 
   return c.json({
     id:          user.id,
     phone:       email || null,
+    username,
     displayName,
-    bio:         null,
-    avatar:      null,
+    bio,
+    avatar,
     isOnline:    true,
     lastSeen:    null,
     createdAt:   new Date().toISOString(),

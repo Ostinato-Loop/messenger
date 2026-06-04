@@ -123,7 +123,7 @@ search.get("/search/related", authMiddleware, async (c) => {
       }
     }
 
-    // ── Step 2: Name-match fallback for broader network ───────────────────────
+    // ── Step 2: Broader network — display_name match in messenger_user_profiles ─
     if (results.length < limit) {
       const { data: broader } = await db
         .from("messenger_user_profiles")
@@ -144,6 +144,34 @@ search.get("/search/related", authMiddleware, async (c) => {
             is_direct:          false,
             relationship_score: 1,
             last_seen:          p["last_seen_at"] as string ?? null,
+          });
+        }
+      }
+    }
+
+    // ── Step 3: Cross-reference RALD profiles table — phone + username search ─
+    // Catches users found by phone number or username who may not yet appear
+    // in messenger_user_profiles (e.g. they haven't opened Messenger yet).
+    if (results.length < limit) {
+      const { data: profileMatches } = await db
+        .from("profiles")
+        .select("id,display_name,username,avatar_url,phone")
+        .or(`username.ilike.${pattern},phone.ilike.${pattern},display_name.ilike.${pattern}`)
+        .neq("id", user.id)
+        .limit(limit);
+
+      for (const p of (profileMatches ?? []) as Array<Record<string, unknown>>) {
+        const uid = p["id"] as string;
+        if (!seen.has(uid)) {
+          seen.add(uid);
+          results.push({
+            id:                 uid,
+            display_name:       (p["display_name"] as string | null) ?? (p["username"] as string | null) ?? null,
+            avatar:             (p["avatar_url"] as string | null) ?? null,
+            conversation_id:    null,
+            is_direct:          false,
+            relationship_score: 1,
+            last_seen:          null,
           });
         }
       }
