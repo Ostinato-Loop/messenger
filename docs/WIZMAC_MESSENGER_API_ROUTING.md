@@ -8,7 +8,7 @@
 
 ## What Is
 
-The Loop Messenger CF Worker is a Hono application deployed at `messenger.rald.cloud`.
+The Loop Messenger CF Worker is a Hono v4 application deployed at `messenger.rald.cloud`.
 It uses **sub-routers** (one per resource) mounted at the root path `"/"` via
 `app.route("/", subRouter)`.
 
@@ -19,126 +19,139 @@ sub-router registered its auth middleware with a wildcard path:
 conversations.use("*", authMiddleware, workspaceMiddleware);
 ```
 
-After the fix, the path is scoped to conversation URLs only:
+After the fix, the path is scoped correctly:
 
 ```ts
-conversations.use("/conversations*", authMiddleware, workspaceMiddleware);
-```
+// conversations.ts — covers GET/POST /conversations AND /conversations/:id/*
+conversations.use("/conversations",   authMiddleware, workspaceMiddleware);
+conversations.use("/conversations/*", authMiddleware, workspaceMiddleware);
 
-Affected sub-routers: `conversations`, `messages`, `reactions`, `members`,
-`assignments`, `attachments`.
+// messages / reactions / members / assignments / attachments
+// (all routes are nested: /conversations/:id/something — /* is sufficient)
+messages.use("/conversations/*",     authMiddleware, workspaceMiddleware);
+reactions.use("/conversations/*",    authMiddleware, workspaceMiddleware);
+members.use("/conversations/*",      authMiddleware, workspaceMiddleware);
+assignments.use("/conversations/*",  authMiddleware, workspaceMiddleware);
+attachments.use("/conversations/*",  authMiddleware, workspaceMiddleware);
+```
 
 ---
 
 ## Why
 
-Hono sub-routers mounted at `"/"` share the same path namespace as the parent
-app. A sub-router middleware registered with `"*"` runs for **every** request
-that reaches that sub-router — including paths the sub-router has no explicit
-handler for.
+Two distinct bugs were present:
 
-Because Hono evaluates middleware and routes in registration order, the
-conversations sub-router's `"*"` middleware intercepted `GET /` and any other
-unmatched path **before** the parent app's root handler could fire:
+### Bug 1 — Wildcard bled into root path (`GET /` → 401)
+
+Hono sub-routers mounted at `"/"` share the parent app's path namespace.
+A sub-router middleware `*.use("*", handler)` is equivalent to `app.use("/*", handler)`,
+which intercepts **every** path — including `GET /` — before the parent's root handler fires.
 
 ```
 Request: GET /
-1. cors ✓ (pass-through)
-2. dbMiddleware ✓ (pass-through)
-3. sso router → no match for GET /
-4. health router → no match for GET /
-5. conversations.use("*", authMiddleware) → ❌ 401 Unauthorized  ← BUG
-   (root handler never reached)
+1. cors ✓
+2. dbMiddleware ✓
+3. sso router       → no match
+4. health router    → no match
+5. conversations.use("*", authMiddleware) → ❌ 401  ← BUG — root handler never reached
 ```
 
-This caused `GET /` (the service-info JSON) to return 401 for any unauthenticated
-request, making the API appear completely inaccessible to monitoring, load
-balancers, health checks, and the Messenger frontend on initial load.
+### Bug 2 — Hono v4 `path*` doesn't match the bare prefix (`GET /conversations` → 500)
+
+In Hono v4, the pattern `"/conversations*"` does **not** match the exact path `/conversations`
+(zero characters after the prefix). As a result, `GET /conversations` bypassed the auth
+middleware entirely, fell through to the route handler, and crashed when it called
+`c.get("user").id` on the unset variable — producing HTTP 500.
+
+The correct Hono v4 patterns are:
+- `"/conversations"` — exact path (matches `GET /conversations` and `POST /conversations`)  
+- `"/conversations/*"` — wildcard sub-paths (matches `/conversations/:id` and deeper)  
 
 ---
 
 ## Mechanics
 
-### Fix
+### Final middleware registration per sub-router
 
-Change the middleware path in all 6 sub-routers from `"*"` to `"/conversations*"`:
-
-| File             | Before                                          | After                                                |
-|------------------|-------------------------------------------------|------------------------------------------------------|
-| conversations.ts | `conversations.use("*", authMiddleware, ...)`   | `conversations.use("/conversations*", authMiddleware, ...)` |
-| messages.ts      | `messages.use("*", authMiddleware, ...)`        | `messages.use("/conversations*", authMiddleware, ...)` |
-| reactions.ts     | `reactions.use("*", authMiddleware, ...)`       | `reactions.use("/conversations*", authMiddleware, ...)` |
-| members.ts       | `members.use("*", authMiddleware, ...)`         | `members.use("/conversations*", authMiddleware, ...)` |
-| assignments.ts   | `assignments.use("*", authMiddleware, ...)`     | `assignments.use("/conversations*", authMiddleware, ...)` |
-| attachments.ts   | `attachments.use("*", authMiddleware, ...)`     | `attachments.use("/conversations*", authMiddleware, ...)` |
-
-### Why `/conversations*` (not `/conversations/*`)
-
-- `/conversations*` matches both `GET /conversations` (no trailing slash — list endpoint)
-  and `GET /conversations/:id` (parameterized paths).
-- `/conversations/*` would miss `GET /conversations` exactly.
+| Router       | Middleware line(s)                                                                 |
+|--------------|-----------------------------------------------------------------------------------|
+| conversations | `use("/conversations", auth, ws)` + `use("/conversations/*", auth, ws)`           |
+| messages      | `use("/conversations/*", auth, ws)` — all paths are `/conversations/:id/messages` |
+| reactions     | `use("/conversations/*", auth, ws)`                                                |
+| members       | `use("/conversations/*", auth, ws)`                                                |
+| assignments   | `use("/conversations/*", auth, ws)`                                                |
+| attachments   | `use("/conversations/*", auth, ws)`                                                |
 
 ### Public endpoints (no auth required)
 
 | Method | Path               | Handler         |
 |--------|--------------------|-----------------|
-| GET    | `/`                | root info JSON  |
+| GET    | `/`                | service info    |
 | GET    | `/health`          | health check    |
 | GET    | `/healthz`         | k8s probe       |
 | GET    | `/version`         | version info    |
 | GET    | `/ready`           | readiness probe |
-| POST   | `/auth/rald-sso`   | token exchange  |
-| GET    | `/auth/silent`     | cookie session  |
+| POST   | `/auth/rald-sso`   | RALD token exchange |
+| GET    | `/auth/silent`     | cookie-based silent session check |
 
-### Auth-gated endpoints (require `Authorization: Bearer <RALD_JWT>`)
+### Auth-gated endpoints (`Authorization: Bearer <RALD_JWT>` + `X-Workspace-ID`)
 
-All `/conversations*` paths require auth + `X-Workspace-ID` header.
+All paths starting with `/conversations` or `/conversations/*`.
+
+### Verified endpoint responses (post-fix)
+
+```
+GET /               → 200 ✅ (service info JSON)
+GET /health         → 200 ✅
+GET /healthz        → 200 ✅
+GET /ready          → 200 ✅
+GET /version        → 200 ✅
+GET /auth/silent    → 401 ✅ (no cookie → {"valid":false,"reason":"no_session_cookie"})
+POST /auth/rald-sso → 400 ✅ (no token → {"error":"rald_token is required"})
+GET /conversations  → 401 ✅ (no auth → {"error":"Unauthorized"})
+GET /conversations  → 401 ✅ (bad token → {"error":"Unauthorized"})
+```
 
 ---
 
 ## Architecture
 
 ```
-messenger.rald.cloud  (Cloudflare Worker — pure JSON API)
+messenger.rald.cloud  (Cloudflare Worker — pure JSON API, Hono v4.7.11)
 │
 ├── cors (*)
 ├── dbMiddleware (*)
 │
-├── sso router       → /auth/rald-sso, /auth/silent        [PUBLIC]
-├── health router    → /health, /healthz, /version, /ready [PUBLIC]
+├── sso router    → /auth/rald-sso, /auth/silent        [PUBLIC]
+├── health router → /health, /healthz, /version, /ready [PUBLIC]
 │
-├── conversations    → /conversations*   [auth + workspace middleware]
-├── messages         → /conversations*   [auth + workspace middleware]
-├── reactions        → /conversations*   [auth + workspace middleware]
-├── members          → /conversations*   [auth + workspace middleware]
-├── assignments      → /conversations*   [auth + workspace middleware]
-├── attachments      → /conversations*   [auth + workspace middleware]
+├── conversations → use("/conversations") + use("/conversations/*")  [AUTH]
+├── messages      → use("/conversations/*")                          [AUTH]
+├── reactions     → use("/conversations/*")                          [AUTH]
+├── members       → use("/conversations/*")                          [AUTH]
+├── assignments   → use("/conversations/*")                          [AUTH]
+├── attachments   → use("/conversations/*")                          [AUTH]
 │
-└── GET /            → service info JSON [PUBLIC — root handler]
+└── GET /  → service info JSON                          [PUBLIC]
 ```
 
 The Messenger frontend SPA is a **separate deployment** (Cloudflare Pages).
-`messenger.rald.cloud` is a pure API — it does not serve HTML.
+`messenger.rald.cloud` is a pure JSON API — it does NOT serve HTML or static files.
 
 ---
 
 ## Caveats
 
-1. **Re-deploy required.** The fix is in source on GitHub. The live CF Worker
-   at `messenger.rald.cloud` will serve the old code until a `wrangler deploy`
-   is triggered from CI or manually.
+1. **Hono v4 wildcard semantics differ from v3.** In v4, `/path*` does NOT match
+   `/path` exactly (requires at least one trailing character). Always pair the
+   exact path with the wildcard: `use("/path", handler); use("/path/*", handler)`.
 
-2. **Hono sub-router wildcard semantics.** When using `app.route("/", subRouter)`,
-   any `subRouter.use("*", handler)` becomes effectively global middleware for
-   the parent app. Always scope middleware to the actual path prefix the router
-   manages. Prefer `app.use("/resource*", handler)` at the parent level, or
-   `subRouter.use("/resource*", handler)` within the sub-router.
+2. **`/auth/silent` 401 is correct behavior.** It returns
+   `{"valid":false,"reason":"no_session_cookie"} [401]` when no `rald_session`
+   cookie is present. Frontends treat this as "user is not logged in."
 
-3. **Loop CF Worker is not affected.** The Loop API Worker
-   (`loop-api.rald.cloud`) mounts routers at explicit paths
-   (`app.route("/api/rooms", rooms)`) and uses per-route inline middleware
-   (`requireAuth()`), so this class of bug does not apply.
+3. **Loop CF Worker is not affected.** `loop-api.rald.cloud` mounts sub-routers at
+   explicit prefixes (`app.route("/api/rooms", rooms)`) and uses per-route inline
+   `requireAuth()`, so the wildcard bleed class of bug cannot occur there.
 
-4. **`/auth/silent` 401 is correct.** `GET /auth/silent` with no `rald_session`
-   cookie returns `{"valid":false,"reason":"no_session_cookie"} [401]`. This is
-   the intended contract — the frontend interprets it as "user not logged in".
+4. **Re-deploy triggers automatically** from CI on push to `main` for this worker.
