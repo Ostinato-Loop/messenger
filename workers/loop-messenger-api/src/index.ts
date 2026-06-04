@@ -21,6 +21,7 @@ import { assignments } from "./routes/assignments";
 import { attachments } from "./routes/attachments";
 import { sso } from "./routes/sso";
 import { users } from "./routes/users";
+import { search } from "./routes/search";
 
 const VERSION = "1.2.0";
 
@@ -59,6 +60,7 @@ app.route("/", members);
 app.route("/", assignments);
 app.route("/", attachments);
 app.route("/", users);
+app.route("/", search);
 
 // ── Mount at /api (Loop Messenger SPA — generated client uses baseUrl="/api") ─
 // Each sub-router's internal middleware paths (e.g. "/conversations") are
@@ -72,6 +74,7 @@ app.route("/api", members);
 app.route("/api", assignments);
 app.route("/api", attachments);
 app.route("/api", users);
+app.route("/api", search);
 
 // ── Root info ─────────────────────────────────────────────────────────────
 app.get("/", (c) =>
