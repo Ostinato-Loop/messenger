@@ -8,7 +8,7 @@ import { writeAudit } from "../lib/audit";
 import { generateId, nowIso } from "../lib/auth";
 
 export const reactions = new Hono<AppContext>();
-reactions.use("*", authMiddleware, workspaceMiddleware);
+reactions.use("/conversations*", authMiddleware, workspaceMiddleware);
 
 // ── POST /conversations/:id/messages/:msgId/reactions ─────────────────────
 reactions.post("/conversations/:id/messages/:msgId/reactions", conversationAccessMiddleware, async (c) => {
