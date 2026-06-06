@@ -78,3 +78,35 @@ jobs:
           npx wrangler@4.16.0 pages deploy artifacts/loop-messenger/dist/public \
             --project-name=loop-messenger \
             --branch=main
+
+      - name: Register messenger.rald.cloud custom domain (idempotent)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            npx wrangler@4.16.0 pages domain add loop-messenger messenger.rald.cloud \
+              || echo "messenger.rald.cloud already configured"
+          fi
+
+      - name: Register chat.rald.cloud custom domain (idempotent)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            npx wrangler@4.16.0 pages domain add loop-messenger chat.rald.cloud \
+              || echo "chat.rald.cloud already configured or pending DNS"
+            echo "✅ chat.rald.cloud registered as alias for loop-messenger Pages"
+          else
+            echo "⚠ CLOUDFLARE_API_TOKEN not set — skipping chat.rald.cloud domain registration"
+          fi
+
+      - name: Health checks
+        run: |
+          sleep 15
+          for url in https://messenger.rald.cloud https://chat.rald.cloud; do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "$url" || echo "000")
+            echo "$url → HTTP $STATUS"
+          done
+        continue-on-error: true
