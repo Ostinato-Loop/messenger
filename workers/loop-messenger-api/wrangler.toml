@@ -16,6 +16,10 @@ SUPABASE_URL    = "https://onxdcikfttdmnhofsuwo.supabase.co"
 pattern         = "messenger.rald.cloud/*"
 zone_name       = "rald.cloud"
 
+[[routes]]
+pattern         = "chat.rald.cloud/*"
+zone_name       = "rald.cloud"
+
 [observability]
 enabled              = true
 head_sampling_rate   = 1
