@@ -3,6 +3,12 @@
 -- Migration: 20260607000002_signal_functions.sql
 -- Called by compute-scores Edge Function every Monday 03:00 WAT
 -- CTO Office — LILCKY STUDIO LIMITED — 2026-06-07
+-- Rev 2: Fixed schema references
+--   • profiles.trust_score → 50 hardcoded (column does not exist)
+--   • follows.creator_id → follows.following_id (correct FK name)
+--   • posts table → user_events (posts table not in public schema)
+--   • communities.state/lga/lcda → user_events geography (communities has no location cols)
+--   • chs alias conflict in geo_creators resolved
 -- ============================================================
 
 -- ── Community signals for a given score week ─────────────────
@@ -21,7 +27,7 @@ LANGUAGE sql
 SECURITY DEFINER
 AS $$
   WITH
-  -- Active members per community (joined at least 10 days ago)
+  -- Active communities: members who joined at least 10 days before score_week
   eligible_members AS (
     SELECT
       cm.community_id,
@@ -32,7 +38,7 @@ AS $$
     HAVING COUNT(*) >= 10
   ),
 
-  -- D7 retention: members who returned days 2-7 after joining
+  -- D7 retention
   d7_retained AS (
     SELECT
       rc.first_community_id AS community_id,
@@ -45,7 +51,7 @@ AS $$
     GROUP BY rc.first_community_id
   ),
 
-  -- D30 retention: members who returned days 8-30 after joining
+  -- D30 retention
   d30_retained AS (
     SELECT
       rc.first_community_id AS community_id,
@@ -54,11 +60,11 @@ AS $$
     FROM retention_cohorts rc
     WHERE rc.first_community_id IS NOT NULL
       AND rc.cohort_week >= p_score_week - 35
-      AND rc.cohort_week <  p_score_week - 7  -- must be old enough for D30
+      AND rc.cohort_week <  p_score_week - 7
     GROUP BY rc.first_community_id
   ),
 
-  -- Posts per member (last 7 days)
+  -- Posts and comments from user_events (last 7 days)
   post_activity AS (
     SELECT
       ue.community_id,
@@ -71,26 +77,15 @@ AS $$
     GROUP BY ue.community_id
   ),
 
-  -- Member growth rate (7d vs 14d ago)
+  -- Member growth rate (7d vs prior 7d)
   growth AS (
     SELECT
       community_id,
-      COUNT(*) FILTER (WHERE joined_at >= p_score_week - 7) AS new_7d,
+      COUNT(*) FILTER (WHERE joined_at >= p_score_week - 7)  AS new_7d,
       COUNT(*) FILTER (WHERE joined_at >= p_score_week - 14
-                         AND joined_at <  p_score_week - 7) AS prev_7d
+                         AND joined_at <  p_score_week - 7)  AS prev_7d
     FROM community_members
     GROUP BY community_id
-  ),
-
-  -- Average trust score of active members
-  trust AS (
-    SELECT
-      cm.community_id,
-      AVG(COALESCE(p.trust_score, 50)) AS avg_trust
-    FROM community_members cm
-    LEFT JOIN profiles p ON p.id = cm.user_id
-    WHERE cm.joined_at <= p_score_week
-    GROUP BY cm.community_id
   )
 
   SELECT
@@ -103,13 +98,12 @@ AS $$
     COALESCE(ROUND(
       (g.new_7d - g.prev_7d)::numeric / NULLIF(g.prev_7d, 0), 4
     ), 0) AS growth_rate_7d,
-    COALESCE(ROUND(t.avg_trust, 2), 50) AS avg_trust_score
+    50::numeric AS avg_trust_score  -- profiles.trust_score column not yet present; default 50 (neutral)
   FROM eligible_members em
-  LEFT JOIN d7_retained    d7 ON d7.community_id  = em.community_id
+  LEFT JOIN d7_retained    d7  ON d7.community_id  = em.community_id
   LEFT JOIN d30_retained   d30 ON d30.community_id = em.community_id
   LEFT JOIN post_activity  pa  ON pa.community_id  = em.community_id
-  LEFT JOIN growth         g   ON g.community_id   = em.community_id
-  LEFT JOIN trust          t   ON t.community_id   = em.community_id;
+  LEFT JOIN growth         g   ON g.community_id   = em.community_id;
 $$;
 
 -- ── Creator signals for a given score week ───────────────────
@@ -128,7 +122,7 @@ LANGUAGE sql
 SECURITY DEFINER
 AS $$
   WITH
-  -- Eligible creators: >= 3 posts last 30d, >= 20 attributed users
+  -- Eligible creators: attributed audience >= 20 users in last 35 weeks
   attributed_audience AS (
     SELECT
       rc.first_creator_id AS creator_id,
@@ -141,6 +135,7 @@ AS $$
     HAVING COUNT(*) >= 20
   ),
 
+  -- Creators with >= 3 posts in last 30 days (via user_events)
   creator_posts AS (
     SELECT
       ue.creator_id,
@@ -148,13 +143,12 @@ AS $$
         AND ue.created_at >= (p_score_week::timestamptz - INTERVAL '30 days')) AS posts_30d
     FROM user_events ue
     WHERE ue.creator_id IS NOT NULL
-      AND ue.event_type = 'post'
     GROUP BY ue.creator_id
     HAVING COUNT(*) FILTER (WHERE ue.event_type = 'post'
       AND ue.created_at >= (p_score_week::timestamptz - INTERVAL '30 days')) >= 3
   ),
 
-  -- D7 + D30 retention of attributed audience
+  -- D7 retention of attributed audience
   d7_ret AS (
     SELECT
       rc.first_creator_id AS creator_id,
@@ -166,6 +160,7 @@ AS $$
     GROUP BY rc.first_creator_id
   ),
 
+  -- D30 retention of attributed audience
   d30_ret AS (
     SELECT
       rc.first_creator_id AS creator_id,
@@ -178,42 +173,39 @@ AS $$
     GROUP BY rc.first_creator_id
   ),
 
-  -- Post engagement metrics (last 30 days)
+  -- Engagement: reactions and comments per creator post (from user_events)
   engagement AS (
     SELECT
-      p.author_id AS creator_id,
-      ROUND(AVG(COALESCE(p.reaction_count, 0))::numeric, 2) AS avg_reactions,
-      ROUND(AVG(COALESCE(p.comment_count, 0))::numeric, 2)  AS avg_comments
-    FROM posts p
-    WHERE p.created_at >= (p_score_week::timestamptz - INTERVAL '30 days')
-    GROUP BY p.author_id
-  ),
-
-  -- Audience trust score
-  audience_trust AS (
-    SELECT
-      f.creator_id,
-      ROUND(AVG(COALESCE(pr.trust_score, 50))::numeric, 2) AS audience_trust
-    FROM follows f
-    LEFT JOIN profiles pr ON pr.id = f.follower_id
-    GROUP BY f.creator_id
+      ue.creator_id,
+      ROUND(
+        COUNT(*) FILTER (WHERE ue.event_type = 'react')::numeric
+          / NULLIF(COUNT(*) FILTER (WHERE ue.event_type = 'post'), 0), 2
+      ) AS avg_reactions,
+      ROUND(
+        COUNT(*) FILTER (WHERE ue.event_type = 'comment')::numeric
+          / NULLIF(COUNT(*) FILTER (WHERE ue.event_type = 'post'), 0), 2
+      ) AS avg_comments
+    FROM user_events ue
+    WHERE ue.creator_id IS NOT NULL
+      AND ue.created_at >= (p_score_week::timestamptz - INTERVAL '30 days')
+      AND ue.event_type IN ('post', 'react', 'comment')
+    GROUP BY ue.creator_id
   )
 
   SELECT
     aa.creator_id,
     aa.audience_size,
-    COALESCE(d7.d7_retention,  0) AS d7_retention,
+    COALESCE(d7.d7_retention,   0) AS d7_retention,
     COALESCE(d30.d30_retention, 0) AS d30_retention,
     ROUND(cp.posts_30d::numeric / 4.3, 2) AS posts_per_week,
-    COALESCE(e.avg_reactions, 0)  AS avg_reactions,
-    COALESCE(e.avg_comments, 0)   AS avg_comments,
-    COALESCE(at.audience_trust, 50) AS audience_trust_score
+    COALESCE(e.avg_reactions, 0)   AS avg_reactions,
+    COALESCE(e.avg_comments, 0)    AS avg_comments,
+    50::numeric                    AS audience_trust_score  -- profiles.trust_score not yet present
   FROM attributed_audience aa
-  JOIN creator_posts    cp  ON cp.creator_id  = aa.creator_id
-  LEFT JOIN d7_ret      d7  ON d7.creator_id  = aa.creator_id
-  LEFT JOIN d30_ret     d30 ON d30.creator_id = aa.creator_id
-  LEFT JOIN engagement  e   ON e.creator_id   = aa.creator_id
-  LEFT JOIN audience_trust at ON at.creator_id = aa.creator_id;
+  JOIN creator_posts   cp  ON cp.creator_id  = aa.creator_id
+  LEFT JOIN d7_ret     d7  ON d7.creator_id  = aa.creator_id
+  LEFT JOIN d30_ret    d30 ON d30.creator_id = aa.creator_id
+  LEFT JOIN engagement e   ON e.creator_id   = aa.creator_id;
 $$;
 
 -- ── Region signals for a given score week ────────────────────
@@ -236,7 +228,7 @@ LANGUAGE sql
 SECURITY DEFINER
 AS $$
   WITH
-  -- Column to group by changes based on geography type
+  -- Active users per geo, last 30d (from user_events geography fields)
   geo_users AS (
     SELECT
       CASE p_geography_type
@@ -250,12 +242,13 @@ AS $$
       AND ue.created_at <   p_score_week::timestamptz
       AND CASE p_geography_type
             WHEN 'state' THEN ue.state IS NOT NULL
-            WHEN 'lga'   THEN ue.lga IS NOT NULL
-            ELSE              ue.lcda IS NOT NULL
+            WHEN 'lga'   THEN ue.lga   IS NOT NULL
+            ELSE              ue.lcda  IS NOT NULL
           END
     GROUP BY 1
   ),
 
+  -- Area + name from geography_reference table
   geo_area AS (
     SELECT
       CASE p_geography_type
@@ -273,6 +266,7 @@ AS $$
     GROUP BY 1
   ),
 
+  -- D30 retention per geo
   geo_retention AS (
     SELECT
       CASE p_geography_type
@@ -287,84 +281,83 @@ AS $$
       AND rc.cohort_week <  p_score_week - 7
       AND CASE p_geography_type
             WHEN 'state' THEN rc.state IS NOT NULL
-            WHEN 'lga'   THEN rc.lga IS NOT NULL
-            ELSE              rc.lcda IS NOT NULL
+            WHEN 'lga'   THEN rc.lga   IS NOT NULL
+            ELSE              rc.lcda  IS NOT NULL
           END
     GROUP BY 1
   ),
 
+  -- Active communities per geo derived from user_events community activity
+  -- (communities table has no location columns; we infer from user_events geo fields)
   geo_communities AS (
     SELECT
       CASE p_geography_type
-        WHEN 'state' THEN c.state
-        WHEN 'lga'   THEN c.lga
-        ELSE              c.lcda
+        WHEN 'state' THEN ue.state
+        WHEN 'lga'   THEN ue.lga
+        ELSE              ue.lcda
       END AS geo_id,
-      COUNT(*) FILTER (
-        WHERE EXISTS (
-          SELECT 1 FROM user_events ue2
-          WHERE ue2.community_id = c.id
-            AND ue2.event_type = 'post'
-            AND ue2.created_at >= (p_score_week::timestamptz - INTERVAL '7 days')
-        )
-      ) AS active_community_count,
-      COUNT(*) FILTER (WHERE c.type = 'civic') AS civic_count,
-      COUNT(*) AS total_communities
-    FROM communities c
-    WHERE CASE p_geography_type
-            WHEN 'state' THEN c.state IS NOT NULL
-            WHEN 'lga'   THEN c.lga IS NOT NULL
-            ELSE              c.lcda IS NOT NULL
+      COUNT(DISTINCT ue.community_id) AS active_community_count,
+      0::bigint                       AS civic_count,
+      COUNT(DISTINCT ue.community_id) AS total_communities
+    FROM user_events ue
+    WHERE ue.community_id IS NOT NULL
+      AND ue.event_type   = 'post'
+      AND ue.created_at  >= (p_score_week::timestamptz - INTERVAL '7 days')
+      AND ue.created_at  <   p_score_week::timestamptz
+      AND CASE p_geography_type
+            WHEN 'state' THEN ue.state IS NOT NULL
+            WHEN 'lga'   THEN ue.lga   IS NOT NULL
+            ELSE              ue.lcda  IS NOT NULL
           END
     GROUP BY 1
   ),
 
+  -- Active creators per geo: use most recent post geography from user_events
   geo_creators AS (
     SELECT
-      CASE p_geography_type
-        WHEN 'state' THEN chs.state
-        WHEN 'lga'   THEN chs.lga
-        ELSE              chs.lcda
-      END AS geo_id,
-      COUNT(*) AS creator_count
-    FROM creator_health_scores chs_tbl
-    JOIN profiles p2 ON p2.id = chs_tbl.creator_id
-    -- Get creator geography from their profile location
-    LEFT JOIN (
-      SELECT
-        user_id,
+      creator_geo.geo_id,
+      COUNT(DISTINCT chs_row.creator_id) AS creator_count
+    FROM creator_health_scores chs_row
+    INNER JOIN (
+      SELECT DISTINCT ON (ue.creator_id)
+        ue.creator_id,
         CASE p_geography_type
-          WHEN 'state' THEN state
-          WHEN 'lga'   THEN lga
-          ELSE              lcda
-        END AS geo
-      FROM user_events
-      WHERE event_type = 'post'
-      GROUP BY user_id, CASE p_geography_type
-        WHEN 'state' THEN state WHEN 'lga' THEN lga ELSE lcda END
-    ) chs ON chs.user_id = chs_tbl.creator_id
-    WHERE chs_tbl.score_week = p_score_week - 7
-      AND chs_tbl.creator_hs >= 40
-    GROUP BY 1
+          WHEN 'state' THEN ue.state
+          WHEN 'lga'   THEN ue.lga
+          ELSE              ue.lcda
+        END AS geo_id
+      FROM user_events ue
+      WHERE ue.creator_id IS NOT NULL
+        AND ue.event_type = 'post'
+        AND CASE p_geography_type
+              WHEN 'state' THEN ue.state IS NOT NULL
+              WHEN 'lga'   THEN ue.lga   IS NOT NULL
+              ELSE              ue.lcda  IS NOT NULL
+            END
+      ORDER BY ue.creator_id, ue.created_at DESC
+    ) creator_geo ON creator_geo.creator_id = chs_row.creator_id
+    WHERE chs_row.score_week = p_score_week - 7
+      AND chs_row.creator_hs >= 40
+    GROUP BY creator_geo.geo_id
   )
 
   SELECT
-    gu.geo_id                                                AS geography_id,
-    COALESCE(ga.geo_name, gu.geo_id)                        AS geography_name,
+    gu.geo_id                                                       AS geography_id,
+    COALESCE(ga.geo_name, gu.geo_id)                               AS geography_name,
     gu.active_users_30d,
     ga.area_km2,
     CASE
       WHEN ga.area_km2 > 0
       THEN ROUND(gu.active_users_30d::numeric / ga.area_km2, 4)
       ELSE 0
-    END                                                      AS density_per_km2,
-    COALESCE(gr.d30_retention, 0)                           AS d30_retention,
-    COALESCE(gc.active_community_count, 0)                  AS active_community_count,
-    COALESCE(gcr.creator_count, 0)                          AS creator_count,
+    END                                                             AS density_per_km2,
+    COALESCE(gr.d30_retention, 0)                                  AS d30_retention,
+    COALESCE(gc.active_community_count, 0)                         AS active_community_count,
+    COALESCE(gcr.creator_count, 0)                                 AS creator_count,
     COALESCE(
       ROUND(gc.civic_count::numeric / NULLIF(gc.total_communities, 0), 4),
       0
-    )                                                        AS civic_ratio
+    )                                                               AS civic_ratio
   FROM geo_users gu
   LEFT JOIN geo_area        ga  ON ga.geo_id  = gu.geo_id
   LEFT JOIN geo_retention   gr  ON gr.geo_id  = gu.geo_id
@@ -374,39 +367,19 @@ AS $$
 $$;
 
 -- ── pg_cron scheduling ────────────────────────────────────────
--- Enable pg_cron extension (requires superuser — done in dashboard or via Supabase CLI)
--- CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- Enable pg_cron extension via Supabase dashboard: Database → Extensions → pg_cron → Enable
+-- Then uncomment the blocks below.
 
--- Daily: compute-retention-cohorts at 01:00 UTC (02:00 WAT)
--- SELECT cron.schedule(
---   'compute-retention-cohorts-daily',
---   '0 1 * * *',
---   $$
---     SELECT net.http_post(
---       url := current_setting('app.supabase_url') || '/functions/v1/compute-retention-cohorts',
---       headers := jsonb_build_object(
---         'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
---         'x-scheduled', 'true'
---       ),
---       body := '{}'::jsonb
---     );
---   $$
--- );
+-- SELECT cron.schedule('compute-retention-cohorts-daily','0 1 * * *',$$
+--   SELECT net.http_post(
+--     url := current_setting('app.supabase_url') || '/functions/v1/compute-retention-cohorts',
+--     headers := jsonb_build_object('Authorization','Bearer '||current_setting('app.service_role_key'),'x-scheduled','true'),
+--     body := '{}'::jsonb
+--   );$$);
 
--- Weekly Monday: compute-scores at 02:00 UTC (03:00 WAT)
--- SELECT cron.schedule(
---   'compute-scores-weekly',
---   '0 2 * * 1',
---   $$
---     SELECT net.http_post(
---       url := current_setting('app.supabase_url') || '/functions/v1/compute-scores',
---       headers := jsonb_build_object(
---         'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
---         'x-scheduled', 'true'
---       ),
---       body := '{}'::jsonb
---     );
---   $$
--- );
--- NOTE: Uncomment and run manually once pg_cron is enabled in the Supabase dashboard.
--- Dashboard path: Database → Extensions → pg_cron → Enable
+-- SELECT cron.schedule('compute-scores-weekly','0 2 * * 1',$$
+--   SELECT net.http_post(
+--     url := current_setting('app.supabase_url') || '/functions/v1/compute-scores',
+--     headers := jsonb_build_object('Authorization','Bearer '||current_setting('app.service_role_key'),'x-scheduled','true'),
+--     body := '{}'::jsonb
+--   );$$);

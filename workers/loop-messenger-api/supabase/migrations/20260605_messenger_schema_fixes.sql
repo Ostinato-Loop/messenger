@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username) WHERE username IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_profiles_phone    ON profiles(phone)    WHERE phone IS NOT NULL;
+-- idx_profiles_phone removed: profiles.phone does not exist in this schema
 
 COMMENT ON TABLE profiles IS 'Shared RALD identity profiles — populated by auth.rald.cloud SSO bridge; consumed by loop, messenger, and profiles apps';
 

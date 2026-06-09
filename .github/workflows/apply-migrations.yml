@@ -1,12 +1,9 @@
 name: Apply Supabase Migrations
 
 # Triggered automatically when migration files change, or manually.
-# Requires SUPABASE_DB_PASSWORD to be configured in the messenger GitHub repo:
-#   SUPABASE_DB_PASSWORD  — Supabase project database password (Settings → Database → Connection info)
-#   SUPABASE_ACCESS_TOKEN — Supabase personal access token (account.supabase.com → Access Tokens)
-#
-# If neither secret is configured, all migration steps are skipped and CI remains green.
-# The migration directory: workers/loop-messenger-api/supabase/migrations/*.sql
+# Requires SUPABASE_DB_PASSWORD to be configured in the messenger GitHub repo secrets.
+# If missing, migration steps are skipped and CI stays green.
+# Migration directory: workers/loop-messenger-api/supabase/migrations/*.sql
 
 on:
   push:
@@ -44,27 +41,18 @@ jobs:
           echo "Migration files:"
           ls -la "$MIGRATION_DIR/"
 
-      # Gate all subsequent steps on secrets being present.
-      # Outputs: skip=true when secrets are missing, skip=false when present.
-      # This prevents psql from hanging on missing credentials.
       - name: Check required secrets
         id: secrets-check
         env:
-          SUPABASE_DB_PASSWORD:  ${{ secrets.SUPABASE_DB_PASSWORD }}
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          if [ -z "$SUPABASE_DB_PASSWORD" ] && [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+          if [ -z "$SUPABASE_DB_PASSWORD" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "WARNING: Supabase secrets not configured — all migration steps will be skipped."
-            echo ""
-            echo "To enable auto-migrations, add at least one of these secrets to the messenger repo:"
-            echo "  SUPABASE_DB_PASSWORD  — from Supabase dashboard Settings > Database"
-            echo "  SUPABASE_ACCESS_TOKEN — from account.supabase.com > Access Tokens"
-            echo ""
-            echo "CI remains green. Run migrations manually via workflow_dispatch or configure secrets."
+            echo "WARNING: SUPABASE_DB_PASSWORD not configured - skipping all migration steps."
+            echo "Add SUPABASE_DB_PASSWORD to messenger repo secrets to enable auto-migrations."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "Required secrets present — proceeding with migration."
+            echo "SUPABASE_DB_PASSWORD present - proceeding with migration."
           fi
 
       - name: Install psql
@@ -73,20 +61,22 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y postgresql-client
 
-      - name: Apply migrations via direct postgres connection
+      - name: Apply migrations via Supabase session pooler
         if: steps.secrets-check.outputs.skip != 'true'
         env:
-          PGPASSWORD:            ${{ secrets.SUPABASE_DB_PASSWORD }}
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          DRY_RUN:               ${{ github.event.inputs.dry_run || 'false' }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          DRY_RUN:    ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           MIGRATION_DIR="workers/loop-messenger-api/supabase/migrations"
-          SUPABASE_HOST="db.onxdcikfttdmnhofsuwo.supabase.co"
-          SUPABASE_USER="postgres"
+          # Session pooler: IPv4, reachable from GitHub Actions runners
+          # db.xxx.supabase.co is IPv6-only and unreachable from GitHub Actions
+          SUPABASE_HOST="aws-0-eu-west-1.pooler.supabase.com"
+          SUPABASE_USER="postgres.onxdcikfttdmnhofsuwo"
           SUPABASE_DB="postgres"
           SUPABASE_PORT="5432"
 
-          echo "Applying migrations to: $SUPABASE_HOST"
+          echo "Host:    $SUPABASE_HOST"
+          echo "User:    $SUPABASE_USER"
           echo "Dry run: $DRY_RUN"
 
           FAILED=0
@@ -95,7 +85,6 @@ jobs:
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "Migration: $f"
             if [ "$DRY_RUN" = "true" ]; then
-              echo "[dry-run] SQL contents:"
               cat "$f"
             else
               if psql \
@@ -105,55 +94,46 @@ jobs:
                 -p "$SUPABASE_PORT" \
                 --set ON_ERROR_STOP=on \
                 -f "$f"; then
-                echo "✓ Applied: $f"
+                echo "OK Applied: $f"
               else
-                echo "⚠ Failed: $f (see error above)"
+                echo "FAIL: $f"
                 FAILED=$((FAILED + 1))
               fi
             fi
           done
 
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           if [ "$FAILED" -gt 0 ]; then
             echo "ERROR: $FAILED migration(s) failed."
             exit 1
           fi
-          echo "Migration run complete — all files applied successfully."
+          echo "All migrations applied successfully."
 
-      - name: Smoke test — verify tables exist
+      - name: Smoke test - verify tables exist
         if: steps.secrets-check.outputs.skip != 'true' && github.event.inputs.dry_run != 'true'
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           RESULT=$(psql \
-            -h "db.onxdcikfttdmnhofsuwo.supabase.co" \
-            -U "postgres" -d "postgres" -p 5432 \
-            -t -A \
+            -h "aws-0-eu-west-1.pooler.supabase.com" \
+            -U "postgres.onxdcikfttdmnhofsuwo" \
+            -d "postgres" -p 5432 -t -A \
             -c "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename IN ('messenger_conversations','messenger_messages','messenger_conversation_members','profiles') ORDER BY tablename;")
           echo "Tables found: $RESULT"
-          EXPECTED="messenger_conversation_members messenger_conversations messenger_messages profiles"
-          ALL_OK=true
-          for t in $EXPECTED; do
+          for t in messenger_conversation_members messenger_conversations messenger_messages profiles; do
             if echo "$RESULT" | grep -q "$t"; then
-              echo "✓ $t"
+              echo "OK $t"
             else
-              echo "✗ MISSING: $t"
-              ALL_OK=false
+              echo "MISSING: $t"
+              exit 1
             fi
           done
-          if [ "$ALL_OK" = "false" ]; then
-            echo "ERROR: One or more expected tables are missing from the database."
-            exit 1
-          fi
-          echo "Smoke test passed — all expected tables present."
+          echo "Smoke test passed."
 
       - name: Summary
         if: always()
         run: |
           if [ "${{ steps.secrets-check.outputs.skip }}" = "true" ]; then
-            echo "SKIPPED: Supabase secrets not configured. Migrations not applied."
-            echo "Action required: Add SUPABASE_DB_PASSWORD to messenger GitHub repo secrets."
+            echo "SKIPPED: SUPABASE_DB_PASSWORD not configured."
           else
-            echo "Migration run complete. Check step logs above for results."
+            echo "Done. Check step logs above for results."
           fi

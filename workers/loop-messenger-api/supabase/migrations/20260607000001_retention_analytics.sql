@@ -47,11 +47,17 @@ CREATE INDEX IF NOT EXISTS idx_user_events_geography      ON user_events (state,
 
 ALTER TABLE user_events ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "service_role_full_access_user_events"
-  ON user_events USING (auth.role() = 'service_role');
+DO $ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='user_events' AND policyname='service_role_full_access_user_events') THEN
+    CREATE POLICY "service_role_full_access_user_events" ON user_events USING (auth.role() = 'service_role');
+  END IF;
+END $;
 
-CREATE POLICY IF NOT EXISTS "user_own_events_select"
-  ON user_events FOR SELECT USING (auth.uid() = user_id);
+DO $ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='user_events' AND policyname='user_own_events_select') THEN
+    CREATE POLICY "user_own_events_select" ON user_events FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+END $;
 
 -- ── 3. Retention cohorts (computed daily) ───────────────────
 CREATE TABLE IF NOT EXISTS retention_cohorts (
@@ -81,8 +87,11 @@ CREATE INDEX IF NOT EXISTS idx_retention_cohorts_creator ON retention_cohorts (f
 
 ALTER TABLE retention_cohorts ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "service_role_full_access_cohorts"
-  ON retention_cohorts USING (auth.role() = 'service_role');
+DO $ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='retention_cohorts' AND policyname='service_role_full_access_cohorts') THEN
+    CREATE POLICY "service_role_full_access_cohorts" ON retention_cohorts USING (auth.role() = 'service_role');
+  END IF;
+END $;
 
 -- ── 4. Community health scores (computed weekly) ────────────
 CREATE TABLE IF NOT EXISTS community_health_scores (
@@ -107,8 +116,11 @@ CREATE TABLE IF NOT EXISTS community_health_scores (
 CREATE INDEX IF NOT EXISTS idx_chs_week ON community_health_scores (score_week, chs DESC NULLS LAST);
 
 ALTER TABLE community_health_scores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "service_role_full_access_chs"
-  ON community_health_scores USING (auth.role() = 'service_role');
+DO $ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='community_health_scores' AND policyname='service_role_full_access_chs') THEN
+    CREATE POLICY "service_role_full_access_chs" ON community_health_scores USING (auth.role() = 'service_role');
+  END IF;
+END $;
 
 -- ── 5. Creator health scores (computed weekly) ──────────────
 CREATE TABLE IF NOT EXISTS creator_health_scores (
@@ -133,8 +145,11 @@ CREATE TABLE IF NOT EXISTS creator_health_scores (
 CREATE INDEX IF NOT EXISTS idx_creator_hs_week ON creator_health_scores (score_week, creator_hs DESC NULLS LAST);
 
 ALTER TABLE creator_health_scores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "service_role_full_access_creator_hs"
-  ON creator_health_scores USING (auth.role() = 'service_role');
+DO $ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='creator_health_scores' AND policyname='service_role_full_access_creator_hs') THEN
+    CREATE POLICY "service_role_full_access_creator_hs" ON creator_health_scores USING (auth.role() = 'service_role');
+  END IF;
+END $;
 
 -- ── 6. Regional density scores (computed weekly) ────────────
 CREATE TABLE IF NOT EXISTS regional_density_scores (
@@ -160,8 +175,11 @@ CREATE INDEX IF NOT EXISTS idx_rds_week      ON regional_density_scores (score_w
 CREATE INDEX IF NOT EXISTS idx_rds_type_week ON regional_density_scores (geography_type, score_week, rds DESC NULLS LAST);
 
 ALTER TABLE regional_density_scores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "service_role_full_access_rds"
-  ON regional_density_scores USING (auth.role() = 'service_role');
+DO $ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='regional_density_scores' AND policyname='service_role_full_access_rds') THEN
+    CREATE POLICY "service_role_full_access_rds" ON regional_density_scores USING (auth.role() = 'service_role');
+  END IF;
+END $;
 
 -- ── 7. Helper function: ISO week Monday ──────────────────────
 CREATE OR REPLACE FUNCTION iso_week_start(ts timestamptz)
