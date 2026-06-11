@@ -1,2 +1,8 @@
-# Cloudflare Pages SPA redirect — all routes to index.html
+# Cloudflare Pages _redirects
+# Proxy /api/* to the Loop Messenger API Cloudflare Worker.
+# Without this proxy, /api/* requests hit Pages and return the SPA HTML instead of JSON.
+/api/*  https://messenger.rald.cloud/api/:splat  200
+
+# SPA catch-all — serve index.html for all non-asset client-side routes.
+# Must be last — Cloudflare Pages matches rules top-to-bottom.
 /*    /index.html    200

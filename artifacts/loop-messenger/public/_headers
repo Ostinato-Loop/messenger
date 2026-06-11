@@ -1,11 +1,11 @@
-# Cloudflare Pages — caching + security optimised for African 3G/4G/5G
+# Cloudflare Pages — caching + security headers for Loop Messenger
 
-# Service worker — never cache (must always be fresh)
+# Service worker — never cache
 /sw.js
   Cache-Control: no-store, no-cache, must-revalidate
   Service-Worker-Allowed: /
 
-# Hashed assets — 1 year immutable (safe because filenames change on deploy)
+# Hashed assets — 1 year immutable
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
   X-Content-Type-Options: nosniff
@@ -27,8 +27,8 @@
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://v3.api.termii.com https://loop-messenger-api.d5a1cd03b76f467430034af64a7062fd.workers.dev https://*.replit.dev https://*.replit.app https://*.pages.dev; worker-src 'self'
+  Permissions-Policy: camera=(self), microphone=(self), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' https: blob:; connect-src 'self' https://api.ng.termii.com https://messenger.rald.cloud https://chat.rald.cloud wss://messenger.rald.cloud wss://chat.rald.cloud https://*.supabase.co wss://*.supabase.co wss://*.livekit.cloud https://*.livekit.cloud https://*.replit.dev https://*.replit.app https://*.pages.dev; worker-src 'self' blob:
 
 # Root — always fresh
 /
@@ -36,5 +36,5 @@
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://v3.api.termii.com https://loop-messenger-api.d5a1cd03b76f467430034af64a7062fd.workers.dev https://*.replit.dev https://*.replit.app https://*.pages.dev; worker-src 'self'
+  Permissions-Policy: camera=(self), microphone=(self), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' https: blob:; connect-src 'self' https://api.ng.termii.com https://messenger.rald.cloud https://chat.rald.cloud wss://messenger.rald.cloud wss://chat.rald.cloud https://*.supabase.co wss://*.supabase.co wss://*.livekit.cloud https://*.livekit.cloud https://*.replit.dev https://*.replit.app https://*.pages.dev; worker-src 'self' blob:

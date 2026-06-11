@@ -49,6 +49,8 @@ app.use(
 // ── CORS ──────────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
   "https://loop-messenger.pages.dev",
+  "https://messenger.rald.cloud",
+  "https://chat.rald.cloud",
   "https://messenger.ostloop.name.ng",
   "https://loop-messenger-api.d5a1cd03b76f467430034af64a7062fd.workers.dev",
 ];

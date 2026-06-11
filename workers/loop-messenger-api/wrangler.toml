@@ -12,12 +12,11 @@ INBOX_URL       = "https://inbox.rald.cloud"
 RALD_AUTH_URL   = "https://auth.rald.cloud"
 SUPABASE_URL    = "https://onxdcikfttdmnhofsuwo.supabase.co"
 
+# API worker handles only the messenger.rald.cloud API domain.
+# chat.rald.cloud is served by Cloudflare Pages (loop-messenger project)
+# so its route is intentionally excluded here — Pages takes precedence.
 [[routes]]
 pattern         = "messenger.rald.cloud/*"
-zone_name       = "rald.cloud"
-
-[[routes]]
-pattern         = "chat.rald.cloud/*"
 zone_name       = "rald.cloud"
 
 [observability]
