@@ -1,17 +1,17 @@
 /**
  * Loop Messenger — Auth page
- * Phase H / Sprint 01: Identity Axiom. Messenger does NOT own authentication.
- * Silent SSO cascade:
- *   Step 1: ?rald_token= in URL → exchange → enter app
- *   Step 2: Stored token valid  → enter app
- *   Step 3: rald_session cookie → /auth/silent → enter app
- *   Step 4: No session          → redirect to profiles.rald.cloud/login
+ * Session Standard V2: localStorage RETIRED. Authentication is cookie-only.
  *
- * FIX (session-ttl): Step 1 now stores the server-issued session token
- * (data.token from the SSO exchange response) instead of the raw URL token.
- * The raw URL token may be a short-lived 5-minute Loop handoff token, which
- * caused Messenger to log users out 5 minutes after arriving from Loop.
- * The worker re-signs a full 7-day session token on every SSO exchange.
+ * Silent SSO cascade:
+ *   Step 1: ?rald_token= in URL → POST /auth/rald-sso → server sets messenger_session
+ *           cookie (HttpOnly, Secure, SameSite=Lax, Domain=.rald.cloud) → enter app
+ *   Step 2: GET /auth/silent { credentials: "include" } → messenger_session cookie sent
+ *           automatically → server validates + refreshes cookie → enter app
+ *   Step 3: No session → redirect to profiles.rald.cloud/login
+ *
+ * No token is ever stored in localStorage or sessionStorage.
+ * The messenger_session HttpOnly cookie is managed exclusively by the
+ * Cloudflare Worker at messenger.rald.cloud and is invisible to JS.
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -19,10 +19,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getGetMeQueryKey } from "@workspace/api-client-react";
 import loopLogo from "@assets/IMG_3832_1779603911915.jpeg";
 
-const MESSENGER_TOKEN_KEY = "messenger_rald_token";
 const RALD_AUTH_UI = (import.meta.env.VITE_RALD_AUTH_URL as string | undefined) ?? "https://profiles.rald.cloud";
 
-// API_BASE is the root of the CF Worker (no /api suffix — auth.tsx calls /auth/* directly).
 const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
   "https://messenger.rald.cloud";
@@ -40,27 +38,24 @@ export default function AuthPage() {
       const paramApp  = params.get("app_id");
 
       // ── Step 1: handoff token in URL ───────────────────────────────────────
+      // POST the raw handoff token to the Worker. The Worker validates it,
+      // looks up the RALD identity, and sets a messenger_session HttpOnly cookie.
+      // No token value is ever stored by the client.
       if (raldToken && (!paramApp || paramApp === "messenger")) {
         try {
           const res = await fetch(`${API_BASE}/auth/rald-sso`, {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ rald_token: raldToken }),
+            method:      "POST",
+            credentials: "include",
+            headers:     { "Content-Type": "application/json" },
+            body:        JSON.stringify({ rald_token: raldToken }),
           });
           if (!res.ok) throw new Error("RALD SSO rejected");
-
-          // FIX (session-ttl): Store the server-issued session token, NOT the raw URL
-          // raldToken. The URL token may be a 5-minute Loop handoff token; the server
-          // re-signs a 7-day Messenger session token and returns it as data.token.
-          const data = await res.json() as { token?: string };
-          const sessionToken = data.token ?? raldToken;
-          localStorage.setItem(MESSENGER_TOKEN_KEY, sessionToken);
 
           window.history.replaceState({}, "", window.location.pathname);
           queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           setLocation("/chats");
           return;
-        } catch (e) {
+        } catch {
           setStatus("error");
           setErrorMsg("Session link expired. Redirecting to sign-in…");
           setTimeout(() => redirectToProfiles(), 2500);
@@ -68,41 +63,25 @@ export default function AuthPage() {
         }
       }
 
-      // ── Step 2: validate stored token via /auth/me ─────────────────────────
-      // Calls the CF Worker's GET /auth/me (JWT decode — no DB round-trip).
-      const stored = localStorage.getItem(MESSENGER_TOKEN_KEY);
-      if (stored) {
-        try {
-          const r = await fetch(`${API_BASE}/auth/me`, {
-            headers: { Authorization: `Bearer ${stored}` },
-          });
-          if (r.ok) {
-            queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-            setLocation("/chats");
-            return;
-          }
-          // 401 = expired/invalid — clear and fall through to re-auth.
-          localStorage.removeItem(MESSENGER_TOKEN_KEY);
-        } catch { /* network error — fall through */ }
-      }
-
-      // ── Step 3: silent SSO via shared rald_session cookie (domain=.rald.cloud) ─
-      // The cookie is set by the Messenger worker on SSO exchange and refreshed
-      // on every /auth/silent call. Falls through if no cookie or token expired.
+      // ── Step 2: silent SSO via messenger_session cookie ────────────────────
+      // The browser sends the HttpOnly cookie automatically because we use
+      // credentials: "include". The Worker validates and optionally refreshes
+      // the cookie TTL. No JS can read the cookie value.
       try {
-        const silentRes = await fetch(`${API_BASE}/auth/silent`, { credentials: "include" });
+        const silentRes = await fetch(`${API_BASE}/auth/silent`, {
+          credentials: "include",
+        });
         if (silentRes.ok) {
-          const silent = await silentRes.json() as { valid: boolean; token?: string };
-          if (silent.valid && silent.token) {
-            localStorage.setItem(MESSENGER_TOKEN_KEY, silent.token!);
+          const silent = await silentRes.json() as { valid: boolean };
+          if (silent.valid) {
             queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
             setLocation("/chats");
             return;
           }
         }
-      } catch { /* no cookie session available — fall through to redirect */ }
+      } catch { /* no cookie session — fall through to redirect */ }
 
-      // ── Step 4: redirect to profiles ──────────────────────────────────────
+      // ── Step 3: redirect to profiles ──────────────────────────────────────
       redirectToProfiles();
     };
 

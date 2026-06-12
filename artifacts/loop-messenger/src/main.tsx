@@ -1,9 +1,7 @@
 import { createRoot } from "react-dom/client";
-import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
+import { setBaseUrl } from "@workspace/api-client-react";
 import App from "./App";
 import "./index.css";
-
-const MESSENGER_TOKEN_KEY = "messenger_rald_token";
 
 // Resolve the API base URL.
 // VITE_API_URL (set in Cloudflare Pages env vars) is the canonical source.
@@ -17,9 +15,11 @@ const apiUrl =
 
 setBaseUrl(apiUrl);
 
-// Wire RALD token into the API client — set once at startup, read dynamically
-// so tokens stored by auth.tsx SSO callback are picked up immediately.
-setAuthTokenGetter(() => localStorage.getItem(MESSENGER_TOKEN_KEY));
+// Session Standard V2: No localStorage token getter.
+// Authentication is handled exclusively via the messenger_session HttpOnly cookie
+// (set by the Cloudflare Worker at messenger.rald.cloud). The custom-fetch layer
+// sends credentials: "include" on every request so the browser attaches the
+// cookie automatically. setAuthTokenGetter is intentionally NOT called here.
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {

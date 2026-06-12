@@ -37,8 +37,10 @@ export function setBaseUrl(url: string | null): void {
  * Useful for Expo bundles making token-gated API calls.
  * Pass `null` to clear the getter.
  *
- * NOTE: This function should never be used in web applications where session
- * token cookies are automatically associated with API calls by the browser.
+ * NOTE: Web applications must NOT call this function. Session Standard V2
+ * mandates cookie-only authentication for all web targets. The
+ * credentials: "include" default in customFetch sends the messenger_session
+ * HttpOnly cookie automatically on every request.
  */
 export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
@@ -351,6 +353,8 @@ export async function customFetch<T = unknown>(
 
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
+  // NOTE: On web, _authTokenGetter is intentionally not set (Session Standard V2).
+  // The messenger_session HttpOnly cookie is sent automatically via credentials: "include".
   if (_authTokenGetter && !headers.has("authorization")) {
     const token = await _authTokenGetter();
     if (token) {
@@ -360,7 +364,15 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  // credentials: "include" — sends the messenger_session HttpOnly cookie on every
+  // request. This is the Session Standard V2 authentication mechanism for web.
+  // Callers may override this by passing credentials: "omit" in options.
+  const response = await fetch(input, {
+    credentials: "include",
+    ...init,
+    method,
+    headers,
+  });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
