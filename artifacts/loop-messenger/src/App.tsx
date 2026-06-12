@@ -24,6 +24,8 @@ const CommunitiesPage   = lazy(() => import("@/pages/communities"));
 const CallsPage         = lazy(() => import("@/pages/calls"));
 const NotFound          = lazy(() => import("@/pages/not-found"));
 
+import { RequireAuth } from "@/components/RequireAuth";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -63,16 +65,32 @@ function AppRoutes() {
         <Switch>
           <Route path="/"                      component={RootRedirect} />
           <Route path="/auth"                  component={AuthPage} />
-          <Route path="/onboarding"            component={OnboardingPage} />
-          <Route path="/chats"                 component={ChatsPage} />
-          <Route path="/chats/:conversationId" component={ChatsPage} />
-          <Route path="/communities"           component={CommunitiesPage} />
-          <Route path="/calls"                 component={CallsPage} />
-          <Route path="/profile"               component={ProfilePage} />
-          <Route path="/settings"              component={SettingsPage} />
           <Route path="/terms"                 component={TermsPage} />
-          <Route path="/admin"                 component={AdminPage} />
-          <Route                               component={NotFound} />
+          <Route path="/onboarding">
+            <RequireAuth><OnboardingPage /></RequireAuth>
+          </Route>
+          <Route path="/chats">
+            <RequireAuth><ChatsPage /></RequireAuth>
+          </Route>
+          <Route path="/chats/:conversationId">
+            <RequireAuth><ChatsPage /></RequireAuth>
+          </Route>
+          <Route path="/communities">
+            <RequireAuth><CommunitiesPage /></RequireAuth>
+          </Route>
+          <Route path="/calls">
+            <RequireAuth><CallsPage /></RequireAuth>
+          </Route>
+          <Route path="/profile">
+            <RequireAuth><ProfilePage /></RequireAuth>
+          </Route>
+          <Route path="/settings">
+            <RequireAuth><SettingsPage /></RequireAuth>
+          </Route>
+          <Route path="/admin">
+            <RequireAuth><AdminPage /></RequireAuth>
+          </Route>
+          <Route component={NotFound} />
         </Switch>
       </Suspense>
     </div>
