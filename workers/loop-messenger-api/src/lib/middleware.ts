@@ -32,12 +32,54 @@ export async function dbMiddleware(c: Context<AppContext>, next: Next) {
   await next();
 }
 
+/**
+ * authMiddleware — Session Standard V2
+ *
+ * Accepts authentication from two sources (in priority order):
+ *
+ *   1. Cookie: rald_session (HttpOnly, Secure, SameSite=Lax)
+ *      Web clients (Loop Messenger SPA) use credentials:"include" so the
+ *      browser sends this cookie automatically on every request. No token
+ *      value is ever stored in localStorage or readable by JavaScript.
+ *
+ *   2. Bearer: Authorization: Bearer <token>
+ *      Expo/React Native mobile builds use SecureStore + setAuthTokenGetter.
+ *      Business API clients may also pass Bearer tokens directly.
+ *
+ * Both paths verify the JWT with the same RALD_JWT_SECRET. The payload
+ * is stored in the Hono context variable "user" for downstream handlers.
+ *
+ * V1 note: Previously only Bearer was accepted. The cookie path was added
+ * to support the Session Standard V2 cookie-only web clients.
+ */
 export async function authMiddleware(c: Context<AppContext>, next: Next) {
-  const auth = c.req.header("Authorization");
-  if (!auth?.startsWith("Bearer ")) return c.json({ error: "Unauthorized" }, 401);
-  const token = auth.slice(7);
+  let token: string | null = null;
+
+  // Priority 1: rald_session HttpOnly cookie (Session Standard V2 — web clients)
+  const cookieHeader = c.req.header("Cookie");
+  if (cookieHeader) {
+    for (const part of cookieHeader.split(";")) {
+      const [k, ...v] = part.trim().split("=");
+      if (k?.trim() === "rald_session") {
+        token = v.join("=").trim() || null;
+        break;
+      }
+    }
+  }
+
+  // Priority 2: Authorization: Bearer <token> (mobile / business API clients)
+  if (!token) {
+    const auth = c.req.header("Authorization");
+    if (auth?.startsWith("Bearer ")) {
+      token = auth.slice(7);
+    }
+  }
+
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+
   const payload = await verifyJwt(token, c.env.RALD_JWT_SECRET);
   if (!payload) return c.json({ error: "Unauthorized" }, 401);
+
   c.set("user", payload);
   await next();
 }
