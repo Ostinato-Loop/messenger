@@ -11,13 +11,19 @@
 //   - POST /auth/logout clears cookie and fires auth.rald.cloud/logout.
 //   - Device registered in auth_devices on every SSO exchange (Sprint 2).
 //
+// FIX (session-ttl): POST /auth/rald-sso now re-signs a Messenger-scoped
+//   session JWT with a full 7-day TTL. Previously it stored the incoming RALD
+//   token directly — if that token was a 5-minute Loop handoff token, users
+//   were logged out of Messenger after 5 minutes. The re-signed token is
+//   returned in the response body as "token" so the frontend can store it.
+//
 // GLOBAL-LOGOUT-001 (2026-06-09): Messenger logout revokes the RALD ecosystem session.
 //
 // LILCKY STUDIO LIMITED
 
 import { Hono } from "hono";
 import { AppContext, authMiddleware } from "../lib/middleware";
-import { verifyJwt } from "../lib/auth";
+import { verifyJwt, signJwt } from "../lib/auth";
 
 export const sso = new Hono<AppContext>();
 
@@ -114,9 +120,27 @@ sso.post("/auth/rald-sso", async (c) => {
     return c.json({ error: "Invalid or expired RALD token" }, 401);
   }
 
-  // COOKIE-001: Set rald_session HttpOnly cookie (7-day TTL)
+  // FIX (session-ttl): Re-sign a Messenger-scoped session token with a full 7-day TTL.
+  // The incoming rald_token may be a short-lived handoff token (e.g. 5-minute cross-app
+  // token from loop.rald.cloud). Storing it verbatim caused users to be logged out of
+  // Messenger 5 minutes after arriving from Loop. The re-signed token uses the same
+  // RALD_JWT_SECRET so authMiddleware can verify it without changes.
   const TTL_7D = 60 * 60 * 24 * 7;
-  c.header("Set-Cookie", buildSessionCookie(body.rald_token, TTL_7D));
+  const now    = Math.floor(Date.now() / 1000);
+  const sessionToken = await signJwt(
+    {
+      id:     rald.id,
+      email:  rald.email  ?? "",
+      role:   rald.role   ?? "user",
+      source: "messenger-sso",
+      iat:    now,
+      exp:    now + TTL_7D,
+    },
+    c.env.RALD_JWT_SECRET,
+  );
+
+  // Set HttpOnly cookie with the re-signed session token (7-day TTL)
+  c.header("Set-Cookie", buildSessionCookie(sessionToken, TTL_7D));
 
   // Sprint 2: Register device (non-blocking)
   const sbUrl = c.env.SUPABASE_URL.replace(/\/$/, "");
@@ -125,9 +149,9 @@ sso.post("/auth/rald-sso", async (c) => {
 
   return c.json({
     authenticated: true,
-    user: { id: rald.id, email: rald.email ?? null, role: rald.role ?? "user" },
-    token: body.rald_token,
-    message: "Use the RALD token as Bearer for all Messenger API calls",
+    user:    { id: rald.id, email: rald.email ?? null, role: rald.role ?? "user" },
+    token:   sessionToken,
+    message: "Use the session token as Bearer for all Messenger API calls",
   });
 });
 
