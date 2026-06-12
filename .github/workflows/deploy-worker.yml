@@ -1,0 +1,68 @@
+name: Deploy — Loop Messenger API › CF Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/loop-messenger-api/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-loop-messenger-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare Workers (messenger.rald.cloud)
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: workers/loop-messenger-api
+        run: npm install
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: d5a1cd03b76f467430034af64a7062fd
+          workingDirectory: workers/loop-messenger-api
+          command: deploy
+
+      - name: Ensure DNS record exists (messenger.rald.cloud AAAA 100::)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node -e "
+          (async()=>{
+            const h={'Authorization':'Bearer '+process.env.CLOUDFLARE_API_TOKEN,'Content-Type':'application/json'};
+            const z=await fetch('https://api.cloudflare.com/client/v4/zones?name=rald.cloud',{headers:h}).then(r=>r.json());
+            const zid=z.result?.[0]?.id; if(!zid){console.log('zone not found');return;}
+            const ex=await fetch('https://api.cloudflare.com/client/v4/zones/'+zid+'/dns_records?name=messenger.rald.cloud',{headers:h}).then(r=>r.json());
+            if(ex.result?.length){console.log('messenger.rald.cloud DNS exists');return;}
+            const r=await fetch('https://api.cloudflare.com/client/v4/zones/'+zid+'/dns_records',{method:'POST',headers:h,body:JSON.stringify({type:'AAAA',name:'messenger',content:'100::',proxied:true})}).then(r=>r.json());
+            console.log(r.success?'Created messenger.rald.cloud AAAA 100::':'DNS error:'+JSON.stringify(r.errors));
+          })().catch(e=>console.error('[WARN]',e.message));
+          "
+
+      - name: Smoke test
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://messenger.rald.cloud/health)
+          echo "messenger.rald.cloud/health HTTP $STATUS"
+          [ "$STATUS" = "200" ] || echo "WARNING: expected 200, got $STATUS"
+
+      - name: Audit log
+        if: always()
+        run: echo "Deploy at $(date -u +%Y-%m-%dT%H:%M:%SZ) commit ${{ github.sha }} by ${{ github.actor }}"
