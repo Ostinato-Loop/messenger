@@ -6,6 +6,12 @@
  *   Step 2: Stored token valid  → enter app
  *   Step 3: rald_session cookie → /auth/silent → enter app
  *   Step 4: No session          → redirect to profiles.rald.cloud/login
+ *
+ * FIX (session-ttl): Step 1 now stores the server-issued session token
+ * (data.token from the SSO exchange response) instead of the raw URL token.
+ * The raw URL token may be a short-lived 5-minute Loop handoff token, which
+ * caused Messenger to log users out 5 minutes after arriving from Loop.
+ * The worker re-signs a full 7-day session token on every SSO exchange.
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -42,7 +48,14 @@ export default function AuthPage() {
             body:    JSON.stringify({ rald_token: raldToken }),
           });
           if (!res.ok) throw new Error("RALD SSO rejected");
-          localStorage.setItem(MESSENGER_TOKEN_KEY, raldToken);
+
+          // FIX (session-ttl): Store the server-issued session token, NOT the raw URL
+          // raldToken. The URL token may be a 5-minute Loop handoff token; the server
+          // re-signs a 7-day Messenger session token and returns it as data.token.
+          const data = await res.json() as { token?: string };
+          const sessionToken = data.token ?? raldToken;
+          localStorage.setItem(MESSENGER_TOKEN_KEY, sessionToken);
+
           window.history.replaceState({}, "", window.location.pathname);
           queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           setLocation("/chats");
@@ -74,8 +87,8 @@ export default function AuthPage() {
       }
 
       // ── Step 3: silent SSO via shared rald_session cookie (domain=.rald.cloud) ─
-      // The cookie is set by auth.rald.cloud on login and shared across all
-      // *.rald.cloud subdomains. The Messenger Worker validates it locally.
+      // The cookie is set by the Messenger worker on SSO exchange and refreshed
+      // on every /auth/silent call. Falls through if no cookie or token expired.
       try {
         const silentRes = await fetch(`${API_BASE}/auth/silent`, { credentials: "include" });
         if (silentRes.ok) {
