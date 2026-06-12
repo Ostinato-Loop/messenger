@@ -38,6 +38,45 @@ export async function verifyJwt(token: string, secret: string): Promise<JwtPaylo
   }
 }
 
+/**
+ * Sign a new JWT with HS256.
+ *
+ * FIX (session-ttl): Used by the SSO route to re-issue a Messenger-scoped
+ * session token with a full 7-day TTL, replacing the incoming RALD token which
+ * may be a short-lived handoff token (5 min) from loop.rald.cloud. This ensures
+ * the Messenger session outlives the handoff window.
+ */
+export async function signJwt(
+  payload: Record<string, unknown>,
+  secret: string,
+): Promise<string> {
+  const encode = (obj: unknown) =>
+    btoa(JSON.stringify(obj))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=/g, "");
+
+  const header = encode({ alg: "HS256", typ: "JWT" });
+  const body   = encode(payload);
+  const input  = `${header}.${body}`;
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, encoder.encode(input));
+  const sig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+
+  return `${input}.${sig}`;
+}
+
 export function generateId(): string {
   return crypto.randomUUID();
 }
