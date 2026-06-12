@@ -32,7 +32,7 @@ export const sso = new Hono<AppContext>();
 const MSG_COOKIE = "rald_session";
 
 function buildSessionCookie(token: string, maxAgeSec: number): string {
-  return `${MSG_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAgeSec}`;
+  return `${MSG_COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Domain=.rald.cloud; Path=/; Max-Age=${maxAgeSec}`;
 }
 
 function clearSessionCookie(): string {
