@@ -92,9 +92,9 @@ export default function AuthPage() {
       try {
         const silentRes = await fetch(`${API_BASE}/auth/silent`, { credentials: "include" });
         if (silentRes.ok) {
-          const silent = await silentRes.json() as { valid: boolean; token?: string };
-          if (silent.valid && silent.token) {
-            localStorage.setItem(MESSENGER_TOKEN_KEY, silent.token);
+          const silent = await silentRes.json() as { valid: boolean; access_token?: string };
+          if (silent.valid && silent.access_token) {
+            localStorage.setItem(MESSENGER_TOKEN_KEY, silent.access_token!);
             queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
             setLocation("/chats");
             return;
