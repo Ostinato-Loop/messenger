@@ -1,0 +1,32 @@
+# Fly.io deployment config — Loop Messenger API (Node.js/Express)
+# Hostname: chat-api.rald.cloud → CNAME to loop-messenger-api.fly.dev  (CF Proxied)
+# The CF Pages site at messenger.rald.cloud proxies /api/* here via _redirects.
+
+app = "loop-messenger-api"
+primary_region = "jnb"  # Johannesburg — lowest latency for West/East Africa
+
+[build]
+  dockerfile = "artifacts/api-server/Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT     = "8080"
+
+[http_service]
+  internal_port       = 8080
+  force_https         = true
+  auto_stop_machines  = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval     = "30s"
+    method       = "GET"
+    path         = "/api/health"
+    timeout      = "5s"
+
+[[vm]]
+  size     = "shared-cpu-1x"
+  memory   = "512mb"
+  cpu_kind = "shared"

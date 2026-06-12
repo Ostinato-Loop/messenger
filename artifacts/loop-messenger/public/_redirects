@@ -1,8 +1,15 @@
-# Cloudflare Pages _redirects
-# Proxy /api/* to the Loop Messenger API Cloudflare Worker.
-# Without this proxy, /api/* requests hit Pages and return the SPA HTML instead of JSON.
-/api/*  https://messenger.rald.cloud/api/:splat  200
+# Cloudflare Pages — Loop Messenger (messenger.rald.cloud)
+#
+# BUG FIX: Previous rule proxied /api/* → messenger.rald.cloud/api/* (circular self-reference).
+# Fixed: proxies to chat-api.rald.cloud — the Fly.io Node.js API server.
+# DNS required: chat-api.rald.cloud  CNAME  loop-messenger-api.fly.dev  (CF Proxied)
+#
+# CF Pages transparently forwards API requests so the browser talks only to
+# messenger.rald.cloud (same-origin — no CORS preflight overhead).
+#
+/api/*  https://chat-api.rald.cloud/api/:splat  200
 
-# SPA catch-all — serve index.html for all non-asset client-side routes.
-# Must be last — Cloudflare Pages matches rules top-to-bottom.
-/*    /index.html    200
+# SPA catch-all — serve index.html for all wouter client-side routes.
+# Required for deep-links: /chats/:id, /profile, /settings, /auth, etc.
+# Must remain last — Cloudflare Pages matches top-to-bottom.
+/*  /index.html  200
