@@ -11,6 +11,7 @@ export const usersTable = pgTable("users", {
   isOnline: boolean("is_online").notNull().default(false),
   lastSeen: timestamp("last_seen"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  raldId: text("rald_id").unique(),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true });

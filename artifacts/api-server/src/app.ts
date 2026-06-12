@@ -100,6 +100,7 @@ const authLimiter = rateLimit({
 app.use(globalLimiter);
 app.use("/api/auth/send-otp", authLimiter);
 app.use("/api/auth/verify-otp", authLimiter);
+app.use("/api/auth/rald-sso", authLimiter);
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 const SESSION_SECRET = process.env.SESSION_SECRET;
