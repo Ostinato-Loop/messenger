@@ -1,35 +1,16 @@
-name: Deploy — Loop Messenger API › Fly.io
+name: Deploy — Loop Messenger API › Fly.io [DISABLED]
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'artifacts/api-server/**'
-      - 'lib/**'
-  workflow_dispatch:
+  # RETIRED: Fly.io deployment is no longer used.
+  # The Loop Messenger API is deployed via deploy-worker.yml to messenger.rald.cloud (CF Worker).
+  # FLY_API_TOKEN was always empty anyway — this workflow never ran successfully.
+  on:
+    workflow_dispatch:
 
-concurrency:
-  group: deploy-loop-messenger-api
-  cancel-in-progress: true
-
-jobs:
-  deploy:
-    name: Deploy API to Fly.io
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Deploy
-        run: flyctl deploy --remote-only --config artifacts/api-server/fly.toml
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Smoke test
-        run: |
-          sleep 20
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://chat-api.rald.cloud/api/health)
-          echo "chat-api.rald.cloud/api/health HTTP $STATUS"
+  jobs:
+    deploy:
+      name: "[DISABLED] — see deploy-worker.yml"
+      runs-on: ubuntu-latest
+      if: false
+      steps:
+        - run: echo "This workflow is retired"
+  

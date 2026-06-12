@@ -1,62 +1,16 @@
-name: Deploy — Loop Messenger › CF Pages
+name: Deploy — Loop Messenger › CF Pages [DISABLED]
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'artifacts/loop-messenger/**'
-  workflow_dispatch:
+  # RETIRED: The old @workspace/loop-messenger CF Pages frontend has been replaced by
+  # loop-messenger-ui-ux (chat.rald.cloud CF Worker, deployed from the loop-messenger-ui-ux repo).
+  # This workflow is disabled to prevent stale deployments.
+  on:
+    workflow_dispatch:
 
-concurrency:
-  group: deploy-loop-messenger-pages
-  cancel-in-progress: true
-
-jobs:
-  deploy:
-    name: Build & deploy to Cloudflare Pages
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Typecheck
-        run: pnpm --filter @workspace/loop-messenger run typecheck
-
-      - name: Build
-        run: pnpm --filter @workspace/loop-messenger run build
-        env:
-          BASE_PATH: /
-          NODE_ENV: production
-          VITE_API_BASE_URL: https://messenger.rald.cloud
-          VITE_RALD_AUTH_URL: https://auth.rald.cloud
-
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: d5a1cd03b76f467430034af64a7062fd
-          command: pages deploy artifacts/loop-messenger/dist/public --project-name=loop-messenger --branch=main
-
-      - name: Smoke test
-        run: |
-          sleep 15
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://messenger.rald.cloud)
-          echo "messenger.rald.cloud HTTP $STATUS"
-          [ "$STATUS" = "200" ] || echo "WARNING: expected 200, got $STATUS"
-
-      - name: Audit log
-        if: always()
-        run: echo "Deploy at $(date -u +%Y-%m-%dT%H:%M:%SZ) commit ${{ github.sha }} by ${{ github.actor }}"
+  jobs:
+    deploy:
+      name: "[DISABLED] — see loop-messenger-ui-ux repo"
+      runs-on: ubuntu-latest
+      if: false
+      steps:
+        - run: echo "This workflow is retired"
+  
