@@ -424,7 +424,8 @@ router.get("/me", async (req: Request, res: Response) => {
     return void res.status(401).json({ error: "User not found" });
   }
 
-  return void res.json(formatUser(user[0]));
+  res.setHeader("X-RALD-Identity-Portal", "https://profiles.rald.cloud");
+  return void res.json({ ...formatUser(user[0]), identity_portal: "https://profiles.rald.cloud" });
 });
 
 // ── POST /auth/logout ─────────────────────────────────────────────────────────
