@@ -1,13 +1,12 @@
 // Loop Messenger API — Cloudflare Worker
-// Deployed at: messenger.rald.cloud | Version: 1.2.1
+// Deployed at: messenger.rald.cloud | Version: 1.2.2
 // Phase G1 — Foundation + G.12 RALD SSO + G.13 Consumer API (/api prefix)
+// G.14 — Internal account provisioning endpoint
 // LILCKY STUDIO LIMITED
 //
 // Routes are mounted at BOTH / and /api:
 //  /          → business API clients sending X-Workspace-ID
 //  /api       → Loop Messenger SPA (generated client with orval baseUrl="/api")
-//
-// This dual-mount means no changes are needed in the frontend build config.
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -22,27 +21,12 @@ import { attachments } from "./routes/attachments";
 import { sso } from "./routes/sso";
 import { users } from "./routes/users";
 import { search } from "./routes/search";
+import { provision } from "./routes/provision";
 
-const VERSION = "1.2.1";
+const VERSION = "1.2.2";
 
 const app = new Hono<AppContext>();
 
-// CORS allowlist:
-//   chat.rald.cloud         — Messenger frontend (primary consumer)
-//   messenger.rald.cloud    — API worker self-reference / Cloudflare Pages mirror
-//   rald.cloud              — Root domain (shared auth flows)
-//   app.rald.cloud          — RALD app shell
-//   profiles.rald.cloud     — Profiles cross-app navigation
-//   loop.rald.cloud         — Loop cross-app navigation
-//   business.rald.cloud     — Business workspace
-//   admin.rald.cloud        — Internal admin tooling
-//   control.rald.cloud      — RALD Control Center
-//   loop-messenger.pages.dev — Cloudflare Pages preview
-//   rald-control-center.pages.dev — Control Center preview
-//   localhost               — Local development
-//
-// NOTE: sv.rald.cloud is the RALD admin/supervisor plane and does NOT
-// interact with the Messenger API directly. It is intentionally excluded.
 app.use("*", cors({
   origin: [
     "https://chat.rald.cloud",
@@ -60,14 +44,17 @@ app.use("*", cors({
     "http://localhost:3000",
     "http://localhost:3001",
   ],
-  allowHeaders: ["Authorization", "Content-Type", "X-Workspace-ID", "X-Request-ID"],
+  allowHeaders: ["Authorization", "Content-Type", "X-Workspace-ID", "X-Request-ID", "X-Internal-Secret", "X-RALD-Signature"],
   allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   credentials: true,
 }));
 
 app.use("*", dbMiddleware);
 
-// ── Mount at / (direct API, backward compat) ──────────────────────────────
+// ── Internal provisioning (no user auth — machine-to-machine only) ────────────
+app.route("/", provision);
+
+// ── Mount at / (direct API, backward compat) ──────────────────────────────────
 app.route("/", sso);
 app.route("/", health);
 app.route("/", conversations);
@@ -79,9 +66,7 @@ app.route("/", attachments);
 app.route("/", users);
 app.route("/", search);
 
-// ── Mount at /api (Loop Messenger SPA — generated client uses baseUrl="/api") ─
-// Each sub-router's internal middleware paths (e.g. "/conversations") are
-// relative to the mount point, so they correctly guard /api/conversations.
+// ── Mount at /api (Loop Messenger SPA) ────────────────────────────────────────
 app.route("/api", sso);
 app.route("/api", health);
 app.route("/api", conversations);
@@ -93,33 +78,22 @@ app.route("/api", attachments);
 app.route("/api", users);
 app.route("/api", search);
 
-// ── Root info ─────────────────────────────────────────────────────────────
+// ── Root info ─────────────────────────────────────────────────────────────────
 app.get("/", (c) =>
   c.json({
     service:     "Loop Messenger API",
     version:     VERSION,
-    phase:       "G1 + G.12 SSO + G.13 Consumer /api prefix",
+    phase:       "G1 + G.12 SSO + G.13 Consumer /api + G.14 Internal provision",
     owner:       "LILCKY STUDIO LIMITED",
     deployed_at: "messenger.rald.cloud",
     endpoints: {
-      sso:            "POST /auth/rald-sso",
-      me:             "GET  /auth/me",
-      silent:         "GET  /auth/silent",
-      health:         "GET  /health",
-      userSearch:     "GET  /users/search?q=",
-      user:           "GET  /users/:id",
-      conversations:  "GET|POST /conversations",
-      conversation:   "GET|PATCH|DELETE /conversations/:id",
-      convStats:      "GET  /conversations/stats",
-      convRead:       "POST /conversations/:id/read",
-      messages:       "GET|POST /conversations/:id/messages",
-      message:        "PATCH|DELETE /conversations/:id/messages/:msgId",
-      reactions:      "GET|POST /conversations/:id/messages/:msgId/reactions",
-      members:        "GET|POST /conversations/:id/members",
-      assignments:    "GET|POST /conversations/:id/assignments",
-      attachments:    "GET|POST /conversations/:id/attachments",
+      sso:              "POST /auth/rald-sso",
+      me:               "GET  /auth/me",
+      health:           "GET  /health",
+      provision:        "POST /internal/accounts/provision",
+      conversations:    "GET|POST /conversations",
+      messages:         "GET|POST /conversations/:id/messages",
     },
-    note: "All routes also available under /api/* for SPA client compatibility.",
     timestamp: new Date().toISOString(),
   })
 );
@@ -132,7 +106,6 @@ app.onError((err, c) => {
 
 export default {
   async fetch(req: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
-    // ── FAIL FAST — exit 503 if critical secrets missing ─────────────────────
     const missing: string[] = [];
     if (!env.RALD_JWT_SECRET)           missing.push("RALD_JWT_SECRET");
     if (!env.SUPABASE_URL)              missing.push("SUPABASE_URL");
