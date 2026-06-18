@@ -1,212 +1,107 @@
-# WIZMAC — Messenger Ecosystem Knowledge Map
-> **WIZMAC** = Workspace Intelligence, Zero-friction Messaging, Auth, Commerce
->
-> This is the institutional memory for the RALD Messenger product.
-> Organisation: Ostinato-Loop (GitHub)
+# WIZMAC — messenger
+> Loop Messenger — Private Messaging Layer
+> Last updated: 2026-06-17 — LILCKY STUDIO LIMITED
+> (Full reference: WIZMAC.md in the messenger repo root)
 
 ---
 
 ## 1. Product Overview
+**messenger** is the private messaging layer of RALD. It powers 1:1 and group messaging between RALD-verified users. Accessible at `chat.rald.cloud` (SPA) and `messenger.rald.cloud` (API).
 
-**Loop Messenger** is the private messaging layer of the RALD ecosystem.
-
-- **Consumer URL:** `https://chat.rald.cloud` (⚠️ DNS not configured — NXDOMAIN as of 2026-06-05)
-- **API URL:** `https://messenger.rald.cloud`
-- **Core message:** "Your private relationship network."
-
-### What Messenger Is
-
-Messenger connects people who share a verified RALD identity. It is built around:
-- Direct 1:1 and group messaging
-- Persistent conversation history
-- Relationship-first design (no ads, no algorithmic noise)
-- RALD SSO identity (same profile as Loop, Profiles)
-
-### What Messenger Is NOT
-- Not a public content feed
-- Not an anonymous messaging platform
-- Not a notification aggregator
-- Not a general-purpose chat for bots/automations
+| Field | Value |
+|-------|-------|
+| API URL | `https://messenger.rald.cloud` |
+| SPA URL | `https://chat.rald.cloud` ⚠️ NXDOMAIN — DNS not configured |
+| Repo | `Ostinato-Loop/messenger` |
+| Stack | Cloudflare Worker (Hono) + React/Vite SPA |
+| Database | Supabase `onxdcikfttdmnhofsuwo.supabase.co` |
+| Version | 1.2.2 |
 
 ---
 
 ## 2. Architecture
-
 | Layer | Stack | Deployment |
 |-------|-------|------------|
 | API Worker | Cloudflare Worker (Hono) | `messenger.rald.cloud` |
-| Frontend SPA | React + Vite (Wouter router) | `chat.rald.cloud` (Cloudflare Pages) |
-| Database | Supabase PostgreSQL | `onxdcikfttdmnhofsuwo.supabase.co` |
-| Auth | RALD SSO via `auth.rald.cloud` | Shared JWT secret |
-
-### API Worker Structure
-```
-workers/loop-messenger-api/
-  src/
-    index.ts          ← Hono app entry, middleware registration
-    routes/           ← Route handlers
-    middleware/       ← Auth, DB, CORS middleware
-  supabase/
-    migrations/       ← SQL migration files
-```
-
-### Frontend SPA
-```
-src/
-  App.tsx             ← Wouter router
-  pages/              ← Conversations, Messages, Profile pages
-  hooks/              ← useAuth, useConversations
-  lib/                ← API client
-```
+| SPA | React + Vite (Wouter) | Cloudflare Pages (`chat.rald.cloud`) |
+| Database | Supabase PostgreSQL | Shared instance |
+| Auth | RALD SSO JWT | Shared `RALD_JWT_SECRET` |
 
 ---
 
 ## 3. Auth Flow
-
-Messenger uses RALD SSO — same as all RALD products:
-
 ```
-1. User visits chat.rald.cloud
-2. No token → redirect to profiles.rald.cloud/login?app_id=messenger&redirect_to=chat.rald.cloud
-3. Profiles issues RALD JWT, redirects to chat.rald.cloud/?rald_token=JWT
-4. Messenger calls POST /api/sso { rald_token } → validates JWT → returns { access_token }
-5. access_token stored in localStorage
-6. All API calls use Authorization: Bearer <access_token>
-7. Logout: POST /api/auth/logout → redirect to profiles.rald.cloud/logout
+1. SPA calls POST /api/sso { rald_token } → returns { access_token }
+2. All API calls: Authorization: Bearer <access_token>
+3. Internal: POST /internal/accounts/provision (X-Internal-Secret only)
 ```
-
-**Shared secret:** `RALD_JWT_SECRET` — same across loop-api, rald-auth-core, messenger.
-Set via Cloudflare Wrangler secrets in CI (`push_secret` step in deploy workflow).
 
 ---
 
 ## 4. Database Schema
-
-### ⚠️ CRITICAL: Migrations NOT Applied as of 2026-06-05
-
-The following tables are defined in migrations but **do not exist in production Supabase**:
-
-```
-messenger_conversations
-messenger_messages
-messenger_conversation_members
-profiles
-```
-
-**Result:** ALL conversation/message endpoints fail in production.
-
-### Pending Action (P0)
-```
-1. Supabase Dashboard → Settings → Database → copy DB password
-2. GitHub → Ostinato-Loop/messenger → Settings → Secrets → add:
-   SUPABASE_DB_PASSWORD = <paste>
-3. GitHub Actions → "Apply Supabase Migrations" → Run workflow
-```
-
-### Migration Files
-```
-supabase/migrations/20260602_messenger_foundation.sql    ← Base schema
-supabase/migrations/20260605_messenger_schema_fixes.sql  ← workspace_id fix, unread_count
-```
-
-Apply workflow: `.github/workflows/apply-migrations.yml`
-
-### Schema Overview (after migrations applied)
-
 ```sql
-messenger_conversations (
-  id UUID PRIMARY KEY,
-  workspace_id TEXT NOT NULL,  -- was UUID, fixed to TEXT (middleware passes "consumer")
-  created_by TEXT NOT NULL,
-  title TEXT,
-  type TEXT NOT NULL,          -- 'direct' | 'group'
-  created_at TIMESTAMPTZ,
-  updated_at TIMESTAMPTZ
-)
+messenger_conversations (id, workspace_id, conversation_type, title,
+  description, created_by, customer_id, status, last_message_at,
+  last_message_preview, message_count, created_at, updated_at, deleted_at)
 
-messenger_messages (
-  id UUID PRIMARY KEY,
-  conversation_id UUID REFERENCES messenger_conversations(id),
-  sender_id TEXT NOT NULL,
-  content TEXT NOT NULL,
-  created_at TIMESTAMPTZ,
-  read_at TIMESTAMPTZ
-)
+messenger_conversation_members (id, conversation_id, workspace_id, user_id,
+  role, joined_at, last_read_at, is_muted, is_archived, left_at)
 
-messenger_conversation_members (
-  conversation_id UUID REFERENCES messenger_conversations(id),
-  user_id TEXT NOT NULL,
-  workspace_id TEXT NOT NULL,
-  unread_count INTEGER DEFAULT 0,
-  joined_at TIMESTAMPTZ,
-  PRIMARY KEY (conversation_id, user_id)
-)
+messenger_messages (id, conversation_id, workspace_id, sender_id, content,
+  message_type, reply_to_id, created_at, updated_at, deleted_at)
 
-profiles (
-  id TEXT PRIMARY KEY,         -- RALD user ID
-  username TEXT,
-  display_name TEXT,
-  avatar_url TEXT,
-  rald_address TEXT
-)
+messenger_message_status (id, message_id, user_id, delivered_at, read_at)
+
+messenger_message_reactions (id, message_id, user_id, emoji, created_at)
+
+messenger_attachments (id, message_id, conversation_id, url, type,
+  filename, size, created_at)
+
+messenger_profiles (id, user_id, username, display_name, avatar_url,
+  bio, is_active, created_at, updated_at)
+-- ⚠️ CRITICAL: Migrations NOT applied to Supabase production
 ```
 
 ---
 
 ## 5. Key Environment Variables
-
 | Variable | Required | Set In |
 |----------|----------|--------|
-| `RALD_JWT_SECRET` | ✅ CRITICAL | GitHub secret → wrangler secret push in CI |
-| `SUPABASE_URL` | ✅ CRITICAL | GitHub secret → wrangler secret push in CI |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ CRITICAL | GitHub secret → wrangler secret push in CI |
-| `SUPABASE_DB_PASSWORD` | Required for migrations only | Must be added to GitHub secrets |
-| `MESSENGER_WEBHOOK_KEY` | For DM notifications | Shared with loop-api for `/api/notify/dm` |
+| `RALD_JWT_SECRET` | ✅ | Cloudflare secret |
+| `SUPABASE_URL` | ✅ | Cloudflare secret |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ ⚠️ ROTATE | Cloudflare secret |
+| `RALD_INTERNAL_SECRET` | ✅ | Cloudflare secret |
+| `SUPABASE_DB_PASSWORD` | Migration only | GitHub secret |
 
 ---
 
-## 6. Live Endpoints (2026-06-05)
-
-| Endpoint | Status | Notes |
-|----------|--------|-------|
-| `messenger.rald.cloud/health` | ✅ 200 OK | `{ status: ok, service: loop-messenger-api }` |
-| `messenger.rald.cloud/ready` | ✅ 200 OK | All checks green (jwt, supabase, notify, search, crm) |
-| `messenger.rald.cloud/api/sso` | ✅ Working | Token exchange with rald_token |
-| `messenger.rald.cloud/api/conversations` | ❌ Fails | DB tables not created yet |
-| `messenger.rald.cloud/api/messages` | ❌ Fails | DB tables not created yet |
-| `chat.rald.cloud` | ❌ NXDOMAIN | Cloudflare Pages custom domain not added |
+## 6. Live Endpoints
+| Method | Path | Auth | Status |
+|--------|------|------|--------|
+| GET | `/health` | None | ✅ |
+| POST | `/auth/rald-sso` | None | ✅ |
+| POST | `/internal/accounts/provision` | `X-Internal-Secret` | ✅ New |
+| GET | `/conversations` | JWT | ⚠️ DB tables not applied |
+| POST | `/conversations` | JWT | ⚠️ DB tables not applied |
+| GET | `/conversations/:id/messages` | JWT | ⚠️ DB tables not applied |
+| POST | `/conversations/:id/messages` | JWT | ⚠️ DB tables not applied |
 
 ---
 
 ## 7. CI Pipelines
-
-| Workflow | Status | Trigger |
-|----------|--------|---------|
-| CI | ✅ Green | Push to main |
-| Deploy Messenger API Worker | ✅ Green | Push to main |
-| Deploy — Cloudflare Pages | ✅ Green | Push to main |
-| Apply Supabase Migrations | ⏸ Manual | workflow_dispatch (requires SUPABASE_DB_PASSWORD secret) |
-
----
-
-## 8. Trust & Positioning
-
-**Messenger Marketing Page** available at `https://rald.cloud/messenger`:
-- Core message: "Your private relationship network."
-- Key trust signals: 0 ads, persistent history, verified RALD identities
-- Cross-app flow: Loop → Profiles → Messenger
+| Workflow | Trigger | Status |
+|----------|---------|--------|
+| CI | Push/PR to main | ✅ Green |
+| Deploy API Worker | Push to main | ✅ Green |
+| Deploy Pages | Push to main | ✅ Green |
+| Apply Migrations | Manual | ⚠️ Requires SUPABASE_DB_PASSWORD |
 
 ---
 
-## 9. Incidents
-
+## 8. Incidents
 | # | Date | Description | Status |
 |---|------|-------------|--------|
-| M001 | 2026-06 | Messenger DB tables never applied to Supabase production | ⚠️ Open — owner must apply migrations |
-| M002 | 2026-06 | workspace_id column was UUID NOT NULL but middleware passes string "consumer" | ✅ Fixed in 20260605 migration (pending application) |
-| M003 | 2026-06 | chat.rald.cloud NXDOMAIN — Cloudflare Pages custom domain not added | ⚠️ Open — owner must add domain |
-
----
-
-*WIZMAC Messenger v1.0 — Created 2026-06-05 — LILCKY STUDIO LIMITED*
-*This document is the single source of truth for RALD Messenger platform operations.*
+| M-001 | 2026-06-05 | Messenger DB tables never applied — all conversation endpoints fail | ⚠️ SQL ready |
+| M-002 | 2026-06-05 | workspace_id UUID/TEXT mismatch | ✅ Fixed in migration 20260605 |
+| M-003 | 2026-06-05 | chat.rald.cloud NXDOMAIN | ⚠️ DNS not configured |
+| M-004 | 2026-06-17 | POST /internal/accounts/provision added for identity chain (v1.2.2) | ✅ Deployed |
